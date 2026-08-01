@@ -14,6 +14,7 @@ let sharedSocket: WebSocket | null = null;
 const realtimeListeners = new Set<(event: any) => void>();
 let reconnectTimer: any = null;
 let pingInterval: any = null;
+const pendingWSQueue: string[] = [];
 
 function initRealtimeWebSocket() {
   if (typeof window === "undefined") return;
@@ -29,6 +30,18 @@ function initRealtimeWebSocket() {
 
     sharedSocket.onopen = () => {
       console.log("⚡ Realtime WebSocket connected to Express server.");
+      // Flush any queued messages immediately upon connection
+      while (pendingWSQueue.length > 0) {
+        const msgStr = pendingWSQueue.shift();
+        if (msgStr && sharedSocket && sharedSocket.readyState === WebSocket.OPEN) {
+          try {
+            sharedSocket.send(msgStr);
+          } catch (e) {
+            console.warn("Error sending queued WS message:", e);
+          }
+        }
+      }
+
       // Keep-alive heartbeat ping every 12 seconds to prevent Cloud Run / Nginx idle timeout
       if (pingInterval) clearInterval(pingInterval);
       pingInterval = setInterval(() => {
@@ -91,12 +104,16 @@ export function subscribeRealtimeChanges(callback: (event: any) => void): () => 
 
 export function sendRealtimeWSMessage(payload: any): void {
   initRealtimeWebSocket();
+  const msgStr = typeof payload === "string" ? payload : JSON.stringify(payload);
   if (sharedSocket && sharedSocket.readyState === WebSocket.OPEN) {
     try {
-      sharedSocket.send(JSON.stringify(payload));
+      sharedSocket.send(msgStr);
     } catch (err) {
       console.warn("Failed to send WS message:", err);
+      pendingWSQueue.push(msgStr);
     }
+  } else {
+    pendingWSQueue.push(msgStr);
   }
 }
 
