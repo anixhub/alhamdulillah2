@@ -1865,18 +1865,7 @@ export default function AdminChatDrawer({
 
             {/* 5 Action Buttons Row */}
             <div className="grid grid-cols-5 gap-1.5 pt-0.5">
-              {/* 1. Lihat */}
-              <button
-                type="button"
-                onClick={() => handlePreviewMedia(selectedMediaMsg)}
-                className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 hover:bg-purple-50 text-slate-700 hover:text-purple-700 transition-all cursor-pointer group border border-slate-100 hover:border-purple-200"
-                title="Lihat / Preview File"
-              >
-                <Eye className="h-4 w-4 mb-1 group-hover:scale-110 transition-transform text-purple-600" />
-                <span className="text-[10px] font-bold">Lihat</span>
-              </button>
-
-              {/* 2. Download */}
+              {/* 1. Download */}
               <button
                 type="button"
                 onClick={() => {
@@ -1892,7 +1881,7 @@ export default function AdminChatDrawer({
                 <span className="text-[10px] font-bold">Download</span>
               </button>
 
-              {/* 3. Tandai */}
+              {/* 2. Tandai */}
               <button
                 type="button"
                 onClick={() => {
@@ -1918,7 +1907,7 @@ export default function AdminChatDrawer({
                 </span>
               </button>
 
-              {/* 4. Pilih Ini (Masuk Mode Multi-Select) */}
+              {/* 3. Pilih Ini (Masuk Mode Multi-Select) */}
               <button
                 type="button"
                 onClick={() => {
@@ -1932,7 +1921,7 @@ export default function AdminChatDrawer({
                 <span className="text-[10px] font-bold">Pilih Ini</span>
               </button>
 
-              {/* 5. Tampilkan di chat */}
+              {/* 4. Tampilkan di chat */}
               <button
                 type="button"
                 onClick={() => {
@@ -1943,6 +1932,20 @@ export default function AdminChatDrawer({
               >
                 <MessageSquare className="h-4 w-4 mb-1 group-hover:scale-110 transition-transform text-emerald-600" />
                 <span className="text-[10px] font-bold text-center leading-none">Ke Chat</span>
+              </button>
+
+              {/* 5. Hapus (Paling Kanan) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMediaIds([selectedMediaMsg.id]);
+                  setShowDeleteMediaModal(true);
+                }}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 hover:bg-rose-50 text-slate-700 hover:text-rose-700 transition-all cursor-pointer group border border-slate-100 hover:border-rose-200"
+                title="Hapus File Ini"
+              >
+                <Trash2 className="h-4 w-4 mb-1 group-hover:scale-110 transition-transform text-rose-600" />
+                <span className="text-[10px] font-bold text-center leading-none">Hapus</span>
               </button>
             </div>
           </div>
