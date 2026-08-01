@@ -55,14 +55,18 @@ export interface ChatReplyTo {
 
 export interface ChatMessage {
   id: string;
-  sender_username: string;
-  sender_name: string;
-  sender_role: string;
+  sender_username?: string;
+  sender_name?: string;
+  sender_role?: string;
+  sender?: string;
+  senderRole?: string;
   sender_avatar?: string;
   recipient_role?: string;
-  message: string;
+  message?: string;
+  text?: string;
   attachment?: ChatAttachment;
   reply_to?: ChatReplyTo;
+  replyTo?: any;
   is_edited?: boolean;
   edited_at?: string;
   created_at: string;
@@ -872,14 +876,18 @@ export default function AdminChatDrawer({
   };
 
   const filteredMessages = messages.filter(m => {
+    if (!m) return false;
     const targetChannel = m.recipient_role || 'semua';
-    const matchesChannel = activeChannel === 'semua' || targetChannel === 'semua' || targetChannel.toLowerCase() === activeChannel.toLowerCase();
+    const activeChan = activeChannel || 'semua';
+    const matchesChannel = activeChan === 'semua' || targetChannel === 'semua' || (targetChannel || '').toLowerCase() === (activeChan || '').toLowerCase();
     
     if (!matchesChannel) return false;
 
-    if (searchQuery.trim()) {
+    if (searchQuery && searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      return m.message.toLowerCase().includes(q) || m.sender_name.toLowerCase().includes(q);
+      const msgText = (m.message || '').toLowerCase();
+      const senderName = (m.sender_name || m.sender || '').toLowerCase();
+      return msgText.includes(q) || senderName.includes(q);
     }
 
     return true;
@@ -1310,8 +1318,13 @@ export default function AdminChatDrawer({
               </div>
             ) : (
               filteredMessages.map((msg) => {
-                const isMe = msg.sender_username.toLowerCase() === currentUsername.toLowerCase() ||
-                             msg.sender_name.toLowerCase() === currentDisplayName.toLowerCase();
+                const senderUsername = (msg.sender_username || msg.sender || '').toLowerCase();
+                const senderNameStr = (msg.sender_name || msg.sender || '').toLowerCase();
+                const myUsername = (currentUsername || '').toLowerCase();
+                const myDisplayName = (currentDisplayName || '').toLowerCase();
+
+                const isMe = (Boolean(senderUsername) && senderUsername === myUsername) ||
+                             (Boolean(senderNameStr) && senderNameStr === myDisplayName);
 
                 return (
                   <div
@@ -1322,9 +1335,9 @@ export default function AdminChatDrawer({
                     {/* Sender Label for Received Messages */}
                     {!isMe && (
                       <div className="flex items-center gap-1.5 mb-1 px-1 text-[11px] font-bold text-slate-700">
-                        <span>{msg.sender_name}</span>
+                        <span>{msg.sender_name || msg.sender || 'Admin'}</span>
                         <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 font-extrabold uppercase">
-                          {msg.sender_role}
+                          {msg.sender_role || msg.senderRole || 'Admin'}
                         </span>
                       </div>
                     )}
