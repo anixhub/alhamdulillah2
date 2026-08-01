@@ -17,6 +17,7 @@ import HumasyView from './components/HumasyView';
 import KeamananView from './components/KeamananView';
 import PengaturanView from './components/PengaturanView';
 import LoginView from './components/LoginView';
+import SantriDetailModal from './components/sekretaris/SantriDetailModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { formatBigDigit, mergeIdField } from './lib/utils';
 
@@ -70,6 +71,7 @@ export default function App() {
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
   const [hasMentionNotification, setHasMentionNotification] = useState<boolean>(false);
+  const [headerSelectedSantri, setHeaderSelectedSantri] = useState<Santri | null>(null);
 
   // Realtime WS unread notification counter & mention detector for Admin Chat
   React.useEffect(() => {
@@ -721,7 +723,18 @@ export default function App() {
           onOpenChat={() => setIsChatOpen(true)}
           unreadChatCount={unreadChatCount}
           hasMentionNotification={hasMentionNotification}
+          santriList={santriList}
+          onChangeModule={handleChangeModule}
+          onSelectSantri={(santri) => setHeaderSelectedSantri(santri)}
         />
+
+        {/* Modal Santri Detail from Global Header Search */}
+        {headerSelectedSantri && (
+          <SantriDetailModal
+            selectedSantri={headerSelectedSantri}
+            onClose={() => setHeaderSelectedSantri(null)}
+          />
+        )}
 
         {/* Admin Obrolan Chat Drawer */}
         <AdminChatDrawer
