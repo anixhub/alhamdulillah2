@@ -467,7 +467,7 @@ export default function AdminChatDrawer({
     };
   }, []);
 
-  // WebSocket Sync
+  // WebSocket Sync & Background Real-Time Polling
   useEffect(() => {
     const unsubscribe = subscribeRealtimeChanges((payload: any) => {
       if (payload.type === 'admin_chat_message' && payload.message) {
@@ -475,7 +475,7 @@ export default function AdminChatDrawer({
         setMessages(prev => {
           const exists = prev.some(m => String(m.id) === String(normalized.id));
           if (exists) {
-            return prev.map(m => String(m.id) === String(normalized.id) ? normalized : m);
+            return prev.map(m => String(m.id) === String(normalized.id) ? { ...m, ...normalized } : m);
           }
           const updated = [...prev, normalized];
           safeLocalStorageSetItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
@@ -485,7 +485,7 @@ export default function AdminChatDrawer({
       } else if (payload.type === 'admin_chat_update' && payload.message) {
         const normalized = normalizeChatMessage(payload.message);
         setMessages(prev => {
-          const updated = prev.map(m => String(m.id) === String(normalized.id) ? normalized : m);
+          const updated = prev.map(m => String(m.id) === String(normalized.id) ? { ...m, ...normalized } : m);
           safeLocalStorageSetItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
           return updated;
         });
@@ -495,10 +495,37 @@ export default function AdminChatDrawer({
           safeLocalStorageSetItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
           return updated;
         });
+      } else if (payload.event === 'db_change' && payload.table === 'admin_chat') {
+        if (payload.data) {
+          const items = Array.isArray(payload.data) ? payload.data : [payload.data];
+          const normalizedItems = items.map(normalizeChatMessage);
+          setMessages(prev => {
+            let updated = [...prev];
+            normalizedItems.forEach(item => {
+              if (payload.action === 'delete') {
+                updated = updated.filter(m => String(m.id) !== String(item.id));
+              } else {
+                const idx = updated.findIndex(m => String(m.id) === String(item.id));
+                if (idx >= 0) {
+                  updated[idx] = { ...updated[idx], ...item };
+                } else {
+                  updated.push(item);
+                }
+              }
+            });
+            safeLocalStorageSetItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+            return updated;
+          });
+          if (payload.action === 'insert') {
+            setTimeout(scrollToBottom, 50);
+          }
+        }
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const loadChatMessages = async () => {
