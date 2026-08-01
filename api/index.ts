@@ -390,6 +390,30 @@ function sanitizePayload(payload: any): any {
   return payload;
 }
 
+async function ensureTableExists(table: string, pool: mysql.Pool) {
+  if (table === 'admin_chat') {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`admin_chat\` (
+          \`id\` VARCHAR(100) NOT NULL PRIMARY KEY,
+          \`sender\` VARCHAR(100) NOT NULL,
+          \`senderRole\` VARCHAR(50),
+          \`senderAvatar\` TEXT,
+          \`text\` TEXT,
+          \`timestamp\` VARCHAR(100),
+          \`channel\` VARCHAR(50) DEFAULT 'semua',
+          \`mentions\` LONGTEXT,
+          \`attachment\` LONGTEXT,
+          \`replyTo\` LONGTEXT,
+          \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+    } catch (e) {
+      console.warn("Could not auto-create admin_chat table:", e);
+    }
+  }
+}
+
 async function tryMySQLQuery(sql: string, params: any[] = []): Promise<{ success: boolean; rows?: any; error?: any }> {
   const pool = getMySQLPool();
   if (!pool) return { success: false, error: "NO_MYSQL" };
@@ -407,6 +431,11 @@ app.get("/api/db/:table", async (req, res) => {
   const { table } = req.params;
   if (!VALID_TABLES.has(table)) {
     return res.status(400).json({ success: false, error: `Tabel '${table}' tidak valid` });
+  }
+
+  const pool = getMySQLPool();
+  if (pool) {
+    await ensureTableExists(table, pool);
   }
 
   const mysqlRes = await tryMySQLQuery(`SELECT * FROM \`${table}\``);
@@ -449,6 +478,7 @@ app.post("/api/db/:table", async (req, res) => {
 
   const pool = getMySQLPool();
   if (pool) {
+    await ensureTableExists(table, pool);
     try {
       for (const row of rowsToInsert) {
         if (!row.id) {
@@ -481,7 +511,9 @@ app.post("/api/db/:table", async (req, res) => {
     } else {
       list.push(row);
     }
-    if (!pool) insertedResults.push(row);
+    if (insertedResults.length === 0) {
+      insertedResults.push(row);
+    }
   }
   memoryStore.set(table, list);
 

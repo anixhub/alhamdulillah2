@@ -21,7 +21,12 @@ import {
   File,
   GripHorizontal,
   ChevronDown,
-  Reply
+  Reply,
+  Eye,
+  Star,
+  Pin,
+  MessageSquare,
+  AlertCircle
 } from 'lucide-react';
 import { 
   fetchTableData, 
@@ -118,6 +123,40 @@ export default function AdminChatDrawer({
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState<number>(0);
   const [previewImageModal, setPreviewImageModal] = useState<{ url: string; name: string } | null>(null);
   const msgMenuRef = useRef<HTMLDivElement>(null);
+
+  // Media Selection, Star & Action Panel State
+  const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
+  const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
+  const [starredMediaIds, setStarredMediaIds] = useState<string[]>([]);
+  const [filterOnlyStarred, setFilterOnlyStarred] = useState<boolean>(false);
+  const [showDeleteMediaModal, setShowDeleteMediaModal] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((prev) => (prev === msg ? null : prev));
+    }, 3500);
+  };
+
+  const handlePreviewMedia = (m: ChatMessage) => {
+    const att = m.attachment;
+    if (!att) return;
+    const fileName = att.name || 'File';
+    const isImage = att.type === 'image' || att.fileType === 'image' || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fileName);
+    if (isImage) {
+      setPreviewImageModal({ url: att.url, name: fileName });
+    } else {
+      showToast('Tidak bisa preview file ini, hanya preview gambar yang didukung');
+    }
+  };
+
+  const handleShowInChat = (msgId: string) => {
+    setActiveTab('chat');
+    setTimeout(() => {
+      scrollToMsg(msgId);
+    }, 120);
+  };
 
   const handleDownloadImage = (url: string, fileName: string) => {
     const link = document.createElement('a');
@@ -768,6 +807,32 @@ export default function AdminChatDrawer({
     }
   };
 
+  const handleDeleteMultipleMessages = async (msgIds: string[]) => {
+    if (!msgIds || msgIds.length === 0) return;
+    const count = msgIds.length;
+    setMessages(prev => {
+      const updated = prev.filter(m => !msgIds.includes(String(m.id)));
+      safeLocalStorageSetItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+
+    for (const id of msgIds) {
+      try {
+        await deleteTableRow('admin_chat', LOCAL_STORAGE_KEY, id);
+        sendRealtimeWSMessage({
+          type: 'admin_chat_delete',
+          id: id
+        });
+      } catch (err) {
+        console.warn('Gagal menghapus pesan:', err);
+      }
+    }
+    setSelectedMediaIds([]);
+    setSelectedMediaId(null);
+    setShowDeleteMediaModal(false);
+    showToast(`${count} file media berhasil dihapus`);
+  };
+
   const handleCopyText = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedMsgId(id);
@@ -820,8 +885,17 @@ export default function AdminChatDrawer({
     return true;
   });
 
-  // Extract all media attachments for Media Tab
-  const mediaMessages = messages.filter(m => m.attachment && m.attachment.url);
+  // Extract all media attachments for Media Tab (with optional Star filter)
+  const mediaMessages = messages.filter(m => {
+    if (!m.attachment || !m.attachment.url) return false;
+    if (filterOnlyStarred) {
+      return starredMediaIds.includes(m.id);
+    }
+    return true;
+  });
+
+  // Selected media message object for Action Panel
+  const selectedMediaMsg = selectedMediaId ? messages.find(m => m.id === selectedMediaId) : null;
 
   if (!isOpen && !isClosing) return null;
 
@@ -954,18 +1028,35 @@ export default function AdminChatDrawer({
               >
                 Chat
               </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('media')}
-                onMouseDown={(e) => e.stopPropagation()}
-                className={`px-4 py-1.5 rounded-full text-xs transition-all cursor-pointer select-none ${
-                  activeTab === 'media'
-                    ? 'bg-white text-slate-900 shadow-xs font-bold'
-                    : 'text-slate-500 hover:text-slate-900 font-medium'
-                }`}
-              >
-                Media
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('media')}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className={`px-3.5 py-1.5 rounded-full text-xs transition-all cursor-pointer select-none ${
+                    activeTab === 'media'
+                      ? 'bg-white text-slate-900 shadow-xs font-bold'
+                      : 'text-slate-500 hover:text-slate-900 font-medium'
+                  }`}
+                >
+                  Media
+                </button>
+                {activeTab === 'media' && (
+                  <button
+                    type="button"
+                    onClick={() => setFilterOnlyStarred(!filterOnlyStarred)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className={`p-1.5 rounded-full transition-all cursor-pointer ${
+                      filterOnlyStarred
+                        ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-400 font-bold'
+                        : 'text-slate-400 hover:text-amber-500 hover:bg-slate-100'
+                    }`}
+                    title={filterOnlyStarred ? 'Tampilkan semua media' : 'Filter media berbintang ⭐'}
+                  >
+                    <Star className={`h-3.5 w-3.5 ${filterOnlyStarred ? 'fill-amber-400 text-amber-500' : ''}`} />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1086,18 +1177,49 @@ export default function AdminChatDrawer({
                   const isZip = /\.(zip|rar|tar|gz|7z)$/i.test(fileName) || lowerName.includes('pindahan');
                   const isSql = /\.(sql|db|sqlite)$/i.test(fileName);
 
+                  const isHighlighted = selectedMediaId === m.id;
+                  const isMultiSelected = selectedMediaIds.includes(m.id);
+                  const isStarred = starredMediaIds.includes(m.id);
+
                   return (
-                    <a 
+                    <div 
                       key={m.id}
-                      href={att.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      download={fileName}
-                      className="group flex flex-col items-center text-center p-2 rounded-xl hover:bg-slate-200/60 transition-colors cursor-pointer select-none"
-                      title={`${fileName} (${formatFileSize(att.size)}) - oleh ${m.sender_name}`}
+                      onClick={() => {
+                        if (selectedMediaIds.length > 0) {
+                          setSelectedMediaIds(prev => 
+                            prev.includes(m.id) ? prev.filter(id => id !== m.id) : [...prev, m.id]
+                          );
+                        } else {
+                          setSelectedMediaId(prev => prev === m.id ? null : m.id);
+                        }
+                      }}
+                      onDoubleClick={() => handlePreviewMedia(m)}
+                      className={`relative group flex flex-col items-center text-center p-2.5 rounded-2xl transition-all cursor-pointer select-none border ${
+                        isMultiSelected
+                          ? 'bg-purple-100/90 border-purple-600 ring-2 ring-purple-600 shadow-md scale-[1.02]' 
+                          : isHighlighted
+                          ? 'bg-purple-50/90 border-purple-400 ring-2 ring-purple-300 shadow-md scale-[1.02]' 
+                          : 'bg-white/60 border-slate-200/80 hover:bg-white hover:shadow-md'
+                      }`}
+                      title={`${fileName} (${formatFileSize(att.size)}) - oleh ${m.sender_name}\nKlik 1x: Sorot | Klik 2x: Preview`}
                     >
+                      {/* Badges on top of card */}
+                      <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1">
+                        {isStarred && (
+                          <span className="p-0.5 rounded-full bg-amber-400 text-white shadow-xs" title="Ditandai">
+                            <Star className="h-3 w-3 fill-current" />
+                          </span>
+                        )}
+                        {/* Centang hanya muncul jika dalam mode pilih (selectedMediaIds) */}
+                        {isMultiSelected && (
+                          <span className="p-0.5 rounded-full bg-purple-600 text-white shadow-xs animate-in zoom-in-50 duration-100">
+                            <Check className="h-3 w-3" />
+                          </span>
+                        )}
+                      </div>
+
                       {/* File Card Icon Preview */}
-                      <div className="relative w-16 h-20 mb-1.5 flex items-center justify-center rounded-lg overflow-hidden bg-white shadow-2xs border border-slate-200/90 group-hover:shadow-md group-hover:scale-105 transition-all">
+                      <div className="relative w-16 h-20 mb-1.5 flex items-center justify-center rounded-xl overflow-hidden bg-white shadow-2xs border border-slate-200/90 group-hover:shadow-md group-hover:scale-105 transition-all">
                         {isImage ? (
                           <img src={att.url} alt={fileName} className="w-full h-full object-cover" />
                         ) : isZip ? (
@@ -1159,10 +1281,12 @@ export default function AdminChatDrawer({
                       </div>
 
                       {/* File Title */}
-                      <p className="text-[11px] font-medium text-slate-700 leading-tight line-clamp-2 w-full break-words group-hover:text-purple-700">
+                      <p className={`text-[11px] leading-tight line-clamp-2 w-full break-words ${
+                        (isHighlighted || isMultiSelected) ? 'text-purple-900 font-bold' : 'text-slate-700 font-medium group-hover:text-purple-700'
+                      }`}>
                         {fileName}
                       </p>
-                    </a>
+                    </div>
                   );
                 })}
               </div>
@@ -1315,7 +1439,6 @@ export default function AdminChatDrawer({
                                   />
                                   <div className="flex items-center justify-between text-[10px] text-purple-800 font-bold px-1">
                                     <span className="truncate">{msg.attachment.name}</span>
-                                    {msg.attachment.isCompressed && <span className="text-emerald-600">Auto Compressed</span>}
                                   </div>
                                 </div>
                               ) : (
@@ -1473,7 +1596,7 @@ export default function AdminChatDrawer({
                   <div className="min-w-0">
                     <p className="font-bold text-slate-800 truncate">{pendingAttachment.name}</p>
                     <p className="text-[10px] text-slate-500">
-                      {formatFileSize(pendingAttachment.size)} {pendingAttachment.isCompressed && '• Auto Compress'}
+                      {formatFileSize(pendingAttachment.size)}
                     </p>
                   </div>
                 </div>
@@ -1504,7 +1627,7 @@ export default function AdminChatDrawer({
                     const isSelected = idx === mentionSelectedIndex;
                     return (
                       <button
-                        key={item.id}
+                        key={`${item.type}_${item.id}_${idx}`}
                         type="button"
                         data-mention-index={idx}
                         onClick={() => handleSelectMention(item.display)}
@@ -1618,11 +1741,11 @@ export default function AdminChatDrawer({
                         </div>
                         <div>
                           <p className="text-xs font-bold text-slate-800">File Dokumen</p>
-                          <p className="text-[10px] text-slate-400">PDF, Word, Excel, Gambar tanpa kompres</p>
+                          <p className="text-[10px] text-slate-400">PDF, Word, Excel, Gambar</p>
                         </div>
                       </button>
 
-                      {/* Option 2: Gambar Auto Compress */}
+                      {/* Option 2: Gambar */}
                       <button
                         type="button"
                         onClick={() => imageFileInputRef.current?.click()}
@@ -1632,8 +1755,8 @@ export default function AdminChatDrawer({
                           <ImageIcon className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-slate-800">Gambar (Auto Kompres)</p>
-                          <p className="text-[10px] text-slate-400">Otomatis kompres di bawah 1MB jika file &gt;1MB</p>
+                          <p className="text-xs font-bold text-slate-800">Gambar</p>
+                          <p className="text-[10px] text-slate-400">Upload foto atau gambar</p>
                         </div>
                       </button>
                     </div>
@@ -1654,6 +1777,189 @@ export default function AdminChatDrawer({
               </div>
             </form>
 
+          </div>
+        )}
+
+        {/* MEDIA ACTION PANEL (Panel Aksi) - Appears at the bottom when in multi-select mode OR when a single item is highlighted */}
+        {selectedMediaIds.length > 0 ? (
+          /* Mode Pilih Banyak (Multi-Select Action Panel) */
+          <div className="p-3 bg-white border-t border-purple-200/80 shadow-2xl animate-in slide-in-from-bottom duration-200 shrink-0 relative z-30">
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-purple-600 text-white font-bold">
+                  <Check className="h-4 w-4" />
+                </div>
+                <p className="text-xs font-bold text-slate-800">
+                  {selectedMediaIds.length} File Dipilih
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedMediaIds([])}
+                className="px-2 py-1 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer font-semibold"
+              >
+                Batal Pilih
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              {/* Tombol Download Banyak */}
+              <button
+                type="button"
+                onClick={() => {
+                  const selectedMsgs = messages.filter(m => selectedMediaIds.includes(m.id) && m.attachment?.url);
+                  selectedMsgs.forEach((msg, idx) => {
+                    setTimeout(() => {
+                      if (msg.attachment) {
+                        handleDownloadImage(msg.attachment.url, msg.attachment.name);
+                      }
+                    }, idx * 250);
+                  });
+                  showToast(`Mengunduh ${selectedMsgs.length} file...`);
+                }}
+                className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs transition-all cursor-pointer border border-blue-200 shadow-2xs"
+              >
+                <Download className="h-4 w-4 shrink-0 text-blue-600" />
+                <span>Download ({selectedMediaIds.length})</span>
+              </button>
+
+              {/* Tombol Hapus Banyak */}
+              <button
+                type="button"
+                onClick={() => setShowDeleteMediaModal(true)}
+                className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition-all cursor-pointer border border-rose-200 shadow-2xs"
+              >
+                <Trash2 className="h-4 w-4 shrink-0 text-rose-600" />
+                <span>Hapus ({selectedMediaIds.length})</span>
+              </button>
+            </div>
+          </div>
+        ) : selectedMediaId && selectedMediaMsg && selectedMediaMsg.attachment ? (
+          /* Mode Sorot 1 File (Single Item Highlighted Panel) */
+          <div className="p-3 bg-white border-t border-purple-200/80 shadow-2xl animate-in slide-in-from-bottom duration-200 shrink-0 relative z-30">
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-purple-100 text-purple-700 font-bold">
+                  <Paperclip className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-800 truncate max-w-[200px] sm:max-w-[260px]">
+                    {selectedMediaMsg.attachment.name || 'File Disorot'}
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    {formatFileSize(selectedMediaMsg.attachment.size)} • Oleh {selectedMediaMsg.sender_name}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedMediaId(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                title="Batal Sorot"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* 5 Action Buttons Row */}
+            <div className="grid grid-cols-5 gap-1.5 pt-0.5">
+              {/* 1. Lihat */}
+              <button
+                type="button"
+                onClick={() => handlePreviewMedia(selectedMediaMsg)}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 hover:bg-purple-50 text-slate-700 hover:text-purple-700 transition-all cursor-pointer group border border-slate-100 hover:border-purple-200"
+                title="Lihat / Preview File"
+              >
+                <Eye className="h-4 w-4 mb-1 group-hover:scale-110 transition-transform text-purple-600" />
+                <span className="text-[10px] font-bold">Lihat</span>
+              </button>
+
+              {/* 2. Download */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedMediaMsg.attachment) {
+                    handleDownloadImage(selectedMediaMsg.attachment.url, selectedMediaMsg.attachment.name);
+                    showToast(`Mengunduh ${selectedMediaMsg.attachment.name}...`);
+                  }
+                }}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 transition-all cursor-pointer group border border-slate-100 hover:border-blue-200"
+                title="Download File"
+              >
+                <Download className="h-4 w-4 mb-1 group-hover:scale-110 transition-transform text-blue-600" />
+                <span className="text-[10px] font-bold">Download</span>
+              </button>
+
+              {/* 3. Tandai */}
+              <button
+                type="button"
+                onClick={() => {
+                  const isStarred = starredMediaIds.includes(selectedMediaMsg.id);
+                  if (isStarred) {
+                    setStarredMediaIds(prev => prev.filter(id => id !== selectedMediaMsg.id));
+                    showToast("Tanda file dihapus");
+                  } else {
+                    setStarredMediaIds(prev => [...prev, selectedMediaMsg.id]);
+                    showToast("File berhasil ditandai ⭐");
+                  }
+                }}
+                className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all cursor-pointer group border ${
+                  starredMediaIds.includes(selectedMediaMsg.id)
+                    ? 'bg-amber-100/90 text-amber-900 font-bold border-amber-300'
+                    : 'bg-slate-50 hover:bg-amber-50 text-slate-700 hover:text-amber-700 border-slate-100'
+                }`}
+                title="Tandai / Favoritkan"
+              >
+                <Star className={`h-4 w-4 mb-1 group-hover:scale-110 transition-transform ${starredMediaIds.includes(selectedMediaMsg.id) ? 'fill-amber-500 text-amber-500' : 'text-amber-600'}`} />
+                <span className="text-[10px] font-bold">
+                  {starredMediaIds.includes(selectedMediaMsg.id) ? 'Ditandai' : 'Tandai'}
+                </span>
+              </button>
+
+              {/* 4. Pilih Ini (Masuk Mode Multi-Select) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMediaIds([selectedMediaMsg.id]);
+                  setSelectedMediaId(null);
+                }}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 hover:bg-purple-50 text-slate-700 hover:text-purple-700 transition-all cursor-pointer group border border-slate-100 hover:border-purple-200"
+                title="Pilih File Ini untuk Mode Multi-Select"
+              >
+                <Check className="h-4 w-4 mb-1 group-hover:scale-110 transition-transform text-purple-600" />
+                <span className="text-[10px] font-bold">Pilih Ini</span>
+              </button>
+
+              {/* 5. Tampilkan di chat */}
+              <button
+                type="button"
+                onClick={() => {
+                  handleShowInChat(selectedMediaMsg.id);
+                }}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 transition-all cursor-pointer group border border-slate-100 hover:border-emerald-200"
+                title="Buka lokasi pesan file ini di percakapan chat"
+              >
+                <MessageSquare className="h-4 w-4 mb-1 group-hover:scale-110 transition-transform text-emerald-600" />
+                <span className="text-[10px] font-bold text-center leading-none">Ke Chat</span>
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Toast Alert Notification Banner */}
+        {toastMessage && (
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[250] max-w-[90%] px-4 py-2.5 rounded-2xl bg-slate-900/95 text-white text-xs font-semibold shadow-2xl backdrop-blur-md border border-slate-700 flex items-center gap-2 animate-in fade-in slide-in-from-top-3 duration-200 pointer-events-auto">
+            <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
+            <span className="truncate">{toastMessage}</span>
+            <button
+              type="button"
+              onClick={() => setToastMessage(null)}
+              className="ml-1 p-0.5 hover:bg-white/20 rounded-full transition-colors cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5 text-slate-300" />
+            </button>
           </div>
         )}
       </div>
@@ -1692,6 +1998,44 @@ export default function AdminChatDrawer({
                 className="px-4 py-2 text-xs font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 transition-colors cursor-pointer shadow-xs"
               >
                 Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Bulk Media Deletion */}
+      {showDeleteMediaModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150 pointer-events-auto">
+          <div className="bg-white rounded-2xl p-5 max-w-xs sm:max-w-sm w-full shadow-2xl border border-slate-100 flex flex-col gap-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-rose-50 rounded-2xl shrink-0 text-rose-600">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-slate-900 text-sm">Hapus {selectedMediaIds.length} Media Selected</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Apakah Anda yakin ingin menghapus {selectedMediaIds.length} media yang dipilih? Tindakan ini tidak dapat dibatalkan.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowDeleteMediaModal(false)}
+                className="px-4 py-2 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowDeleteMediaModal(false);
+                  await handleDeleteMultipleMessages(selectedMediaIds);
+                }}
+                className="px-4 py-2 text-xs font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 transition-colors cursor-pointer shadow-xs"
+              >
+                Hapus Semua
               </button>
             </div>
           </div>

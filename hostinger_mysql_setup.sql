@@ -309,6 +309,21 @@ CREATE TABLE IF NOT EXISTS `role_has_permissions` (
   FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 11. TABEL ADMIN CHAT
+CREATE TABLE IF NOT EXISTS `admin_chat` (
+  `id` VARCHAR(100) NOT NULL PRIMARY KEY,
+  `sender` VARCHAR(100) NOT NULL,
+  `senderRole` VARCHAR(50),
+  `senderAvatar` TEXT,
+  `text` TEXT,
+  `timestamp` VARCHAR(100),
+  `channel` VARCHAR(50) DEFAULT 'semua',
+  `mentions` LONGTEXT,
+  `attachment` LONGTEXT,
+  `replyTo` LONGTEXT,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- SEED PERIODE DEFAULT
 INSERT INTO `periode` (`id`, `nama`, `is_active`) VALUES ('Semua', 'Semua Periode', 1)
 ON DUPLICATE KEY UPDATE `id`=`id`;
