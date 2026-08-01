@@ -396,22 +396,49 @@ async function ensureTableExists(table: string, pool: mysql.Pool) {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`admin_chat\` (
           \`id\` VARCHAR(100) NOT NULL PRIMARY KEY,
-          \`sender\` VARCHAR(100) NOT NULL,
-          \`senderRole\` VARCHAR(50),
-          \`senderAvatar\` TEXT,
-          \`text\` TEXT,
-          \`timestamp\` VARCHAR(100),
+          \`sender_username\` VARCHAR(100) NULL,
+          \`sender_name\` VARCHAR(100) NULL,
+          \`sender_role\` VARCHAR(50) NULL,
+          \`recipient_role\` VARCHAR(50) NULL,
+          \`message\` LONGTEXT NULL,
+          \`sender\` VARCHAR(100) NULL,
+          \`senderRole\` VARCHAR(50) NULL,
+          \`senderAvatar\` TEXT NULL,
+          \`text\` LONGTEXT NULL,
+          \`timestamp\` VARCHAR(100) NULL,
           \`channel\` VARCHAR(50) DEFAULT 'semua',
-          \`mentions\` LONGTEXT,
-          \`attachment\` LONGTEXT,
-          \`replyTo\` LONGTEXT,
+          \`mentions\` LONGTEXT NULL,
+          \`attachment\` LONGTEXT NULL,
+          \`reply_to\` LONGTEXT NULL,
+          \`replyTo\` LONGTEXT NULL,
           \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+
+      const columnsToEnsure = ['sender_username', 'sender_name', 'sender_role', 'recipient_role', 'message', 'reply_to'];
+      for (const col of columnsToEnsure) {
+        try {
+          await pool.query(`ALTER TABLE \`admin_chat\` ADD COLUMN \`${col}\` LONGTEXT NULL`);
+        } catch (e) {
+          // Column already exists or table structure error, ignore
+        }
+      }
     } catch (e) {
       console.warn("Could not auto-create admin_chat table:", e);
     }
   }
+}
+
+async function getTableColumns(table: string, pool: mysql.Pool): Promise<Set<string> | null> {
+  try {
+    const [rows]: any = await pool.query(`SHOW COLUMNS FROM \`${table}\``);
+    if (Array.isArray(rows)) {
+      return new Set(rows.map((r: any) => r.Field));
+    }
+  } catch (err) {
+    console.warn(`Could not get columns for ${table}:`, err);
+  }
+  return null;
 }
 
 async function tryMySQLQuery(sql: string, params: any[] = []): Promise<{ success: boolean; rows?: any; error?: any }> {
@@ -479,12 +506,18 @@ app.post("/api/db/:table", async (req, res) => {
   const pool = getMySQLPool();
   if (pool) {
     await ensureTableExists(table, pool);
+    const existingColumns = await getTableColumns(table, pool);
     try {
       for (const row of rowsToInsert) {
         if (!row.id) {
           row.id = String(Date.now()) + Math.random().toString(36).substring(2, 7);
         }
-        const keys = Object.keys(row);
+        let keys = Object.keys(row);
+        if (existingColumns) {
+          keys = keys.filter(k => existingColumns.has(k));
+        }
+        if (keys.length === 0) continue;
+
         const columns = keys.map(k => `\`${k}\``).join(", ");
         const placeholders = keys.map(() => "?").join(", ");
         const values = keys.map(k => (typeof row[k] === "object" && row[k] !== null ? JSON.stringify(row[k]) : row[k]));
@@ -555,9 +588,13 @@ app.put("/api/db/:table/:id", async (req, res) => {
   const pool = getMySQLPool();
   if (pool) {
     try {
+      const existingColumns = await getTableColumns(table, pool);
       const updateData = { ...sanitizedBody };
       delete updateData.id;
-      const keys = Object.keys(updateData);
+      let keys = Object.keys(updateData);
+      if (existingColumns) {
+        keys = keys.filter(k => existingColumns.has(k));
+      }
 
       if (keys.length > 0) {
         const setClause = keys.map(k => `\`${k}\` = ?`).join(", ");

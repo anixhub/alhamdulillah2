@@ -312,7 +312,12 @@ CREATE TABLE IF NOT EXISTS `role_has_permissions` (
 -- 11. TABEL ADMIN CHAT
 CREATE TABLE IF NOT EXISTS `admin_chat` (
   `id` VARCHAR(100) NOT NULL PRIMARY KEY,
-  `sender` VARCHAR(100) NOT NULL,
+  `sender_username` VARCHAR(100),
+  `sender_name` VARCHAR(100),
+  `sender_role` VARCHAR(50),
+  `recipient_role` VARCHAR(50),
+  `message` LONGTEXT,
+  `sender` VARCHAR(100),
   `senderRole` VARCHAR(50),
   `senderAvatar` TEXT,
   `text` TEXT,
@@ -320,6 +325,7 @@ CREATE TABLE IF NOT EXISTS `admin_chat` (
   `channel` VARCHAR(50) DEFAULT 'semua',
   `mentions` LONGTEXT,
   `attachment` LONGTEXT,
+  `reply_to` LONGTEXT,
   `replyTo` LONGTEXT,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
