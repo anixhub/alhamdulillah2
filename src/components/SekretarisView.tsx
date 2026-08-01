@@ -402,7 +402,7 @@ export default function SekretarisView({
     document.body.removeChild(link);
   };
 
-  const handleExportExcelSantri = () => {
+  const handleExportExcelSantri = (customFileName?: string) => {
     // Definisi kolom ekspor yang sesuai urutan data
     const exportColumns = [
       { id: 'nis', label: 'NIS', isAlwaysVisible: true, getValue: (s: Santri) => s.nis || '' },
@@ -461,7 +461,11 @@ export default function SekretarisView({
     const rows = sortedSantri.map(s => activeColumns.map(col => col.getValue(s)));
 
     const dateStr = new Date().toISOString().split('T')[0];
-    handleExportExcelXML(`Data_Santri_${dateStr}.xls`, 'Data Santri', headers, rows);
+    const defaultName = `Data_Santri_${dateStr}.xls`;
+    const finalName = customFileName
+      ? (customFileName.toLowerCase().endsWith('.xls') || customFileName.toLowerCase().endsWith('.xlsx') ? customFileName : `${customFileName}.xls`)
+      : defaultName;
+    handleExportExcelXML(finalName, 'Data Santri', headers, rows);
   };
 
 
@@ -879,7 +883,7 @@ export default function SekretarisView({
     }
   };
 
-  const printBulkSantri = (list: Santri[]) => {
+  const printBulkSantri = (list: Santri[], customTitle?: string) => {
     const profile = getPesantrenProfile();
     if (!list || list.length === 0) {
       alert('Tidak ada data santri untuk dicetak.');
@@ -931,7 +935,7 @@ export default function SekretarisView({
     let html = `
       <html>
       <head>
-        <title>LAPORAN DATA SANTRI (${list.length} Santri) - ${profile.namaPesantren.toUpperCase()}</title>
+        <title>${customTitle ? customTitle.replace(/\.pdf$/i, '') : `LAPORAN DATA SANTRI (${list.length} Santri) - ${profile.namaPesantren.toUpperCase()}`}</title>
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
@@ -1019,8 +1023,8 @@ export default function SekretarisView({
     }
   };
 
-  const handlePrintPDFSantri = () => {
-    printBulkSantri(sortedSantri);
+  const handlePrintPDFSantri = (customFileName?: string) => {
+    printBulkSantri(sortedSantri, customFileName);
   };
 
   // (States moved to top of component)
@@ -1130,11 +1134,16 @@ export default function SekretarisView({
     const isGenderViewable = s.gender === 'Putra' ? canViewPutra : canViewPutri;
     if (!isGenderViewable) return false;
 
+    const qLower = searchQuery.toLowerCase().trim();
     const matchesSearch = 
-      (s.nama || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (s.nis || '').includes(searchQuery) ||
-      (s.asal && s.asal.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (s.kamar && s.kamar.toLowerCase().includes(searchQuery.toLowerCase()));
+      !qLower ||
+      (s.nama || '').toLowerCase().includes(qLower) ||
+      (s.nis || '').toLowerCase().includes(qLower) ||
+      (s.nisn || '').toLowerCase().includes(qLower) ||
+      (s.nik || '').toLowerCase().includes(qLower) ||
+      (s.nism || '').toLowerCase().includes(qLower) ||
+      (s.asal && s.asal.toLowerCase().includes(qLower)) ||
+      (s.kamar && s.kamar.toLowerCase().includes(qLower));
     
     const matchesStatus = statusFilter === 'semua' 
       || (statusFilter === 'Alumni' ? (s.statusKeanggotaan === 'Alumni' || s.statusKeanggotaan === 'Meninggal') : s.statusKeanggotaan === statusFilter);
@@ -1845,7 +1854,7 @@ export default function SekretarisView({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Cari nama, NIS, asal kota, atau kamar santri..."
+                  placeholder="Cari nama, NIS, NISN, NIK, asal kota, atau kamar santri..."
                   className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-11 pr-4 text-sm text-slate-800 placeholder-slate-400 transition-all focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none"
                 />
                 {searchQuery && (
@@ -2721,11 +2730,12 @@ export default function SekretarisView({
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         subTab={subTab as any}
-        onExportExcel={() => {
-          handleExportExcelSantri();
+        defaultFileName={`Data_Santri_${new Date().toISOString().split('T')[0]}`}
+        onExportExcel={(fileName) => {
+          handleExportExcelSantri(fileName);
         }}
-        onPrintPDF={() => {
-          handlePrintPDFSantri();
+        onPrintPDF={(fileName) => {
+          handlePrintPDFSantri(fileName);
         }}
       />
 

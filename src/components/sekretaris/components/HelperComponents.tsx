@@ -45,7 +45,6 @@ export function MembershipBadge({ status, showChevron }: { status: 'Aktif' | 'Al
   if (status === 'Alumni') {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors">
-        <GraduationCap className="h-3 w-3" />
         <span>Alumni</span>
         {showChevron && <ChevronsUpDown className="h-3 w-3 opacity-70 shrink-0 text-slate-500" />}
       </span>
@@ -54,7 +53,6 @@ export function MembershipBadge({ status, showChevron }: { status: 'Aktif' | 'Al
   if (status === 'Meninggal') {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700 border border-slate-300 hover:bg-slate-200 transition-colors">
-        <HeartCrack className="h-3 w-3" />
         <span>Meninggal</span>
         {showChevron && <ChevronsUpDown className="h-3 w-3 opacity-70 shrink-0 text-slate-500" />}
       </span>
@@ -62,7 +60,6 @@ export function MembershipBadge({ status, showChevron }: { status: 'Aktif' | 'Al
   }
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors">
-      <CheckCircle2 className="h-3 w-3" />
       <span>Aktif</span>
       {showChevron && <ChevronsUpDown className="h-3 w-3 opacity-70 shrink-0 text-slate-500" />}
     </span>

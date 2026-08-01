@@ -74,6 +74,7 @@ import { BirthDatePicker } from './sekretaris/BirthDatePicker';
 import { getPesantrenProfile, renderSantriAvatar, isCustomPasFoto } from './SekretarisHelper';
 import { fetchTableData, insertTableRow, updateTableRow, deleteTableRow, subscribeRealtimeChanges, snakeToCamel } from '../lib/api';
 import { DEFAULT_ROLES } from '../lib/permissions';
+import { ExportModal } from './ExportModal';
 
 const springTransition = {
   type: "tween",
@@ -2536,7 +2537,7 @@ export default function KeamananView({
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
-  const handleExportExcelCatatan = () => {
+  const handleExportExcelCatatan = (customFileName?: string) => {
     const headers = [
       'No',
       'Nama Santri',
@@ -2566,15 +2567,19 @@ export default function KeamananView({
     });
 
     const dateStr = format(new Date(), 'yyyy-MM-dd');
+    const defaultName = `Buku_Induk_Pelanggaran_${filterGender}_${dateStr}.xls`;
+    const finalName = customFileName
+      ? (customFileName.toLowerCase().endsWith('.xls') || customFileName.toLowerCase().endsWith('.xlsx') ? customFileName : `${customFileName}.xls`)
+      : defaultName;
     handleExportExcelXML(
-      `Buku_Induk_Pelanggaran_${filterGender}_${dateStr}.xls`,
+      finalName,
       `Buku Induk ${filterGender}`,
       headers,
       rows
     );
   };
 
-  const handleExportExcelOverview = () => {
+  const handleExportExcelOverview = (customFileName?: string) => {
     const totalKasus = activeKeamananList.filter(rec => {
       const student = santriList.find(s => s.nama.toLowerCase() === rec.namaSantri.toLowerCase());
       return !student || student.gender === filterGender;
@@ -2940,13 +2945,17 @@ export default function KeamananView({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `Overview_Keamanan_${filterGender}_${dateStr}.xls`);
+    const defaultName = `Overview_Keamanan_${filterGender}_${dateStr}.xls`;
+    const finalName = customFileName
+      ? (customFileName.toLowerCase().endsWith('.xls') || customFileName.toLowerCase().endsWith('.xlsx') ? customFileName : `${customFileName}.xls`)
+      : defaultName;
+    link.setAttribute('download', finalName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const handlePrintPDFKeamanan = () => {
+  const handlePrintPDFKeamanan = (customFileName?: string) => {
     const activePeriodName = periodes.find(p => p.id === selectedPeriode)?.nama || 'Semua Periode';
     const formattedDate = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
     const printedBy = localStorage.getItem('smartsantri_username') || 'Petugas Keamanan';
@@ -3164,7 +3173,7 @@ export default function KeamananView({
     const html = `
       <html>
       <head>
-        <title>${displayTab === 'overview' ? 'Overview' : 'Buku Induk'} Keamanan - ${profile.namaPesantren}</title>
+        <title>${customFileName ? customFileName.replace(/\.pdf$/i, '') : `${displayTab === 'overview' ? 'Overview' : 'Buku Induk'} Keamanan - ${profile.namaPesantren}`}</title>
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
         <style>
@@ -8112,130 +8121,23 @@ export default function KeamananView({
       </AnimatePresence>
 
       {/* ======================================= */}
-      {/* MODAL: EKSPOR & CETAK LAPORAN */}
-      {/* ======================================= */}
-      <AnimatePresence>
-        {isExportModalOpen && (
-          <div className="fixed inset-0 z-[110] overflow-y-auto">
-            <div className="flex min-h-screen items-center justify-center p-4 text-center">
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
-                onClick={() => setIsExportModalOpen(false)}
-              />
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white text-left shadow-2xl border-0 font-sans p-6"
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <div className="h-9 w-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                      <Share2 className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-extrabold text-slate-800">
-                        Ekspor &amp; Cetak Laporan
-                      </h3>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Pilih metode pelaporan untuk halaman {displayTab === 'overview' ? 'Overview' : 'Data Pelanggaran'}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setIsExportModalOpen(false)}
-                    className="h-8 w-8 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors flex items-center justify-center border-none bg-transparent cursor-pointer"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-
-                {/* Info Box */}
-                <div className="bg-slate-50/55 rounded-xl border border-slate-100 p-3.5 mb-5 flex items-start gap-2.5">
-                  <Info className="h-4.5 w-4.5 text-indigo-500 shrink-0 mt-0.5" />
-                  <div className="text-xs leading-normal">
-                    <span className="font-bold text-slate-700 block">Kriteria Laporan Terpilih:</span>
-                    <ul className="list-disc pl-4 mt-1 text-slate-500 space-y-0.5 font-medium">
-                      <li>Halaman aktif: <b className="text-slate-700">{displayTab === 'overview' ? 'Overview Keamanan' : 'Data Pelanggaran (Buku Induk)'}</b></li>
-                      <li>Kategori gender: <b className="text-slate-700">{filterGender}</b></li>
-                      <li>Periode laporan: <b className="text-slate-700">{periodes.find(p => p.id === selectedPeriode)?.nama || 'Semua Periode'}</b></li>
-                    </ul>
-                  </div>
-                </div>
-
-                {/* Options Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Option 1: Print PDF */}
-                  <div
-                    onClick={() => {
-                      setIsExportModalOpen(false);
-                      setTimeout(() => {
-                        handlePrintPDFKeamanan();
-                      }, 150);
-                    }}
-                    className="group border border-slate-200/80 hover:border-indigo-400 hover:bg-indigo-50/10 rounded-2xl p-4 transition-all cursor-pointer select-none text-left flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                        <Printer className="h-5 w-5" />
-                      </div>
-                      <h4 className="text-sm font-bold text-slate-800 mb-1 group-hover:text-indigo-700">Cetak PDF / Printer</h4>
-                      <p className="text-[11px] text-slate-400 leading-normal font-medium">
-                        Cetak dokumen fisik atau ekspor ke PDF resmi dengan kop surat pesantren dan ttd pengesahan.
-                      </p>
-                    </div>
-                    <div className="mt-4 pt-2 border-t border-slate-50 flex justify-end">
-                      <span className="text-[10px] font-bold text-indigo-600 group-hover:underline">Buka Cetak &rarr;</span>
-                    </div>
-                  </div>
-
-                  {/* Option 2: Excel */}
-                  <div
-                    onClick={() => {
-                      setIsExportModalOpen(false);
-                      if (displayTab === 'overview') {
-                        handleExportExcelOverview();
-                      } else {
-                        handleExportExcelCatatan();
-                      }
-                    }}
-                    className="group border border-slate-200/80 hover:border-emerald-400 hover:bg-emerald-50/10 rounded-2xl p-4 transition-all cursor-pointer select-none text-left flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                        <FileSpreadsheet className="h-5 w-5" />
-                      </div>
-                      <h4 className="text-sm font-bold text-slate-800 mb-1 group-hover:text-emerald-700">Unduh Excel (.xls)</h4>
-                      <p className="text-[11px] text-slate-400 leading-normal font-medium">
-                        Unduh semua data mentah dan ringkasan visual ke format Microsoft Excel spreadsheet.
-                      </p>
-                    </div>
-                    <div className="mt-4 pt-2 border-t border-slate-50 flex justify-end">
-                      <span className="text-[10px] font-bold text-emerald-600 group-hover:underline">Unduh File &rarr;</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="mt-6 flex justify-end border-0 bg-white pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsExportModalOpen(false)}
-                    className="px-4 py-2 text-xs font-bold border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl transition-all cursor-pointer select-none"
-                  >
-                    Tutup
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Export Modal */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        subTab="keamanan"
+        title="Ekspor & Cetak Laporan Keamanan"
+        description={`Pilih format keluaran untuk laporan keamanan (${displayTab === 'overview' ? 'Overview' : 'Data Pelanggaran'}) gender ${filterGender}.`}
+        defaultFileName={`${displayTab === 'overview' ? 'Overview_Keamanan' : 'Buku_Induk_Pelanggaran'}_${filterGender}_${new Date().toISOString().split('T')[0]}`}
+        onExportExcel={(fileName) => {
+          if (displayTab === 'overview') {
+            handleExportExcelOverview(fileName);
+          } else {
+            handleExportExcelCatatan(fileName);
+          }
+        }}
+        onPrintPDF={(fileName) => handlePrintPDFKeamanan(fileName)}
+      />
 
       {/* ======================================= */}
       {/* PRINT AREA TEMPLATE (HIDDEN ON SCREEN)  */}

@@ -139,6 +139,14 @@ export default function AdminChatDrawer({
   const [showDeleteMediaModal, setShowDeleteMediaModal] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Unselect media and cancel selection mode when switching to Chat tab or closing modal
+  useEffect(() => {
+    if (activeTab === 'chat' || !isOpen) {
+      setSelectedMediaId(null);
+      setSelectedMediaIds([]);
+    }
+  }, [activeTab, isOpen]);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -226,9 +234,9 @@ export default function AdminChatDrawer({
   const imageFileInputRef = useRef<HTMLInputElement>(null);
 
   // Active User Info
-  const currentUsername = localStorage.getItem('smartsantri_active_username') || 'superadmin@attaroqqy.com';
-  const currentDisplayName = localStorage.getItem('smartsantri_active_display_name') || 'Admin Utama';
-  const currentRole = localStorage.getItem('smartsantri_active_role') || 'superadmin';
+  const currentUsername = localStorage.getItem('smartsantri_active_username') || '';
+  const currentDisplayName = localStorage.getItem('smartsantri_active_display_name') || 'Admin';
+  const currentRole = localStorage.getItem('smartsantri_active_role') || 'admin';
 
   // Helper to normalize message structure from DB / WebSocket / LocalStorage
   const normalizeChatMessage = (msg: any): ChatMessage => {

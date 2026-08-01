@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { KategoriRombel, KelompokRombel, RombelAssignment, Santri, isEmisTerdaftar } from '../../types';
 import SantriDetailModal from '../sekretaris/SantriDetailModal';
+import { ExportModal } from '../ExportModal';
 import { getPesantrenProfile } from '../SekretarisHelper';
 
 interface RombelSubProps {
@@ -173,7 +174,7 @@ export default function RombelSub({
   };
 
   // Export All Rombels across all Kategori Rombel into a beautifully formatted Excel File
-  const exportRombelToExcel = () => {
+  const exportRombelToExcel = (customFileName?: string) => {
     const profile = getPesantrenProfile();
     let html = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -306,19 +307,24 @@ export default function RombelSub({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `AttarOkey4.0_Data_Rombel_${selectedGender}_${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}.xls`);
+    const dateStr = `${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}`;
+    const defaultName = `Data_Rombel_${selectedGender}_${dateStr}.xls`;
+    const finalName = customFileName
+      ? (customFileName.toLowerCase().endsWith('.xls') || customFileName.toLowerCase().endsWith('.xlsx') ? customFileName : `${customFileName}.xls`)
+      : defaultName;
+    link.setAttribute('download', finalName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   // Print All Rombels across all Kategori Rombel of selected gender
-  const printRombel = () => {
+  const printRombel = (customFileName?: string) => {
     const profile = getPesantrenProfile();
     let html = `
       <html>
       <head>
-        <title>DATA ROMBEL SANTRI ${selectedGender.toUpperCase()} - ${profile.namaPesantren.toUpperCase()}</title>
+        <title>${customFileName ? customFileName.replace(/\.pdf$/i, '') : `DATA ROMBEL SANTRI ${selectedGender.toUpperCase()} - ${profile.namaPesantren.toUpperCase()}`}</title>
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
         <style>
           @media print {
@@ -2307,7 +2313,7 @@ export default function RombelSub({
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                       <input
                         type="text"
-                        placeholder="Cari nama atau NIS..."
+                        placeholder="Cari nama atau alamat..."
                         value={modalStudentSearchQuery}
                         onChange={(e) => setModalStudentSearchQuery(e.target.value)}
                         className="w-full pl-9 pr-8 py-2 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none"
@@ -2384,10 +2390,10 @@ export default function RombelSub({
                       )
                     );
                     const grp = ass ? groupsList.find(g => g.id === ass.kelompokId)?.nama : '';
+                    const addressParts = [s.desa, s.kecamatan, s.kabupaten, s.alamat, s.asal].filter(Boolean).map(x => String(x).toLowerCase());
                     return (
                       String(s.nama || '').toLowerCase().includes(query) ||
-                      String(s.nis || '').toLowerCase().includes(query) ||
-                      String(s.kamar || '').toLowerCase().includes(query) ||
+                      addressParts.some(p => p.includes(query)) ||
                       (grp && String(grp).toLowerCase().includes(query))
                     );
                   }
@@ -2589,9 +2595,9 @@ export default function RombelSub({
                                     <div className="min-w-0 flex-1">
                                       <p className="text-xs font-bold text-slate-850 truncate leading-tight">{s.nama}</p>
                                       <p className="text-[10px] text-slate-500 font-medium mt-0.5 truncate">
-                                        <span className="font-semibold text-slate-700">{s.nis || '-'}</span>
-                                        <span className="mx-1 text-slate-300">|</span>
-                                        <span className="font-semibold text-slate-700">{s.kamar || '-'}</span>
+                                        <span className="font-medium text-slate-700">
+                                          {[s.desa, s.kecamatan, s.kabupaten].filter(Boolean).map(x => x!.trim()).join(', ') || s.alamat || s.asal || '-'}
+                                        </span>
                                         <span className="mx-1 text-slate-300">|</span>
                                         <span className={`font-semibold ${otherGroupName ? 'text-amber-700 font-bold' : 'text-slate-400 font-normal'}`}>
                                           {otherGroupName || 'Belum tergabung'}
@@ -2838,73 +2844,16 @@ export default function RombelSub({
       </AnimatePresence>
 
       {/* Export Modal */}
-      <AnimatePresence>
-        {isExportModalOpen && (
-          <div className="fixed inset-0 z-55 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.5 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsExportModalOpen(false)}
-              className="fixed inset-0 bg-slate-900"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-100 bg-white p-6 shadow-2xl z-50 text-slate-700 font-sans"
-            >
-              <div className="flex items-start justify-between border-b border-slate-100 pb-3 mb-6">
-                <h3 className="font-display text-lg font-bold text-slate-950">
-                  Ekspor Data Rombel
-                </h3>
-                <button
-                  onClick={() => setIsExportModalOpen(false)}
-                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                {/* Pilihan 1: Excel */}
-                <button
-                  onClick={() => {
-                    exportRombelToExcel();
-                    setIsExportModalOpen(false);
-                  }}
-                  className="flex flex-col items-center justify-center gap-3 p-5 rounded-2xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/20 group transition-all duration-250 cursor-pointer animate-none bg-transparent text-left outline-none"
-                >
-                  <div className="h-12 w-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-                    <FileSpreadsheet className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-900 group-hover:text-emerald-800 transition-colors text-center">Unduh Excel</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5 text-center">Format .XLS (Rapi)</p>
-                  </div>
-                </button>
-
-                {/* Pilihan 2: Cetak PDF */}
-                <button
-                  onClick={() => {
-                    printRombel();
-                    setIsExportModalOpen(false);
-                  }}
-                  className="flex flex-col items-center justify-center gap-3 p-5 rounded-2xl border border-slate-200 hover:border-rose-500 hover:bg-rose-50/20 group transition-all duration-250 cursor-pointer animate-none bg-transparent text-left outline-none"
-                >
-                  <div className="h-12 w-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-                    <Printer className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-900 group-hover:text-rose-800 transition-colors text-center">Cetak PDF</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5 text-center">Tampilan Cetak / PDF</p>
-                  </div>
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        subTab="rombel"
+        title="Ekspor Data Rombel"
+        description={`Pilih format keluaran untuk data rombel ${selectedGender} yang sedang aktif terfilter.`}
+        defaultFileName={`Data_Rombel_${selectedGender}_${new Date().toISOString().split('T')[0]}`}
+        onExportExcel={(fileName) => exportRombelToExcel(fileName)}
+        onPrintPDF={(fileName) => printRombel(fileName)}
+      />
 
       {/* --- CONFIRMATION DIALOG MODAL --- */}
       <AnimatePresence>

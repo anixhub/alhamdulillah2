@@ -32,6 +32,7 @@ import { Santri, Kompleks, Kamar, Lembaga, Kelas } from "../../types";
 import { hasValidRoom } from "../../lib/utils";
 import { renderSantriAvatar, getPesantrenProfile } from "../SekretarisHelper";
 import SantriDetailModal from "../sekretaris/SantriDetailModal";
+import { ExportModal } from "../ExportModal";
 
 interface DataKamarSantriSubProps {
   santriList: Santri[];
@@ -540,7 +541,7 @@ export default function DataKamarSantriSub({
   ).length;
 
   // Excel Export Handler (XML Format compatible with Excel)
-  const handleExportExcel = () => {
+  const handleExportExcel = (customFileName?: string) => {
     const headers = [
       "No",
       "Nama Lengkap",
@@ -637,17 +638,18 @@ export default function DataKamarSantriSub({
     const link = document.createElement("a");
     link.href = url;
     const dateStr = new Date().toISOString().split("T")[0];
-    link.setAttribute(
-      "download",
-      `Data_Kamar_Santri_${genderFilter}_${dateStr}.xls`,
-    );
+    const defaultName = `Data_Kamar_Santri_${genderFilter}_${dateStr}.xls`;
+    const finalName = customFileName
+      ? (customFileName.toLowerCase().endsWith('.xls') || customFileName.toLowerCase().endsWith('.xlsx') ? customFileName : `${customFileName}.xls`)
+      : defaultName;
+    link.setAttribute("download", finalName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   // Print PDF Handler
-  const handlePrintPDF = () => {
+  const handlePrintPDF = (customFileName?: string) => {
     const profile = getPesantrenProfile();
     if (sortedSantri.length === 0) {
       alert("Tidak ada data santri untuk dicetak.");
@@ -657,7 +659,7 @@ export default function DataKamarSantriSub({
     let html = `
       <html>
       <head>
-        <title>LAPORAN PENEMPATAN KAMAR SANTRI ${genderFilter.toUpperCase()} - ${profile.namaPesantren.toUpperCase()}</title>
+        <title>${customFileName ? customFileName.replace(/\.pdf$/i, '') : `LAPORAN PENEMPATAN KAMAR SANTRI ${genderFilter.toUpperCase()} - ${profile.namaPesantren.toUpperCase()}`}</title>
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
@@ -2266,86 +2268,17 @@ export default function DataKamarSantriSub({
         onClose={() => setSelectedSantri(null)}
       />
 
-      {/* Combined Export Modal - Styled exactly like other export screens */}
-      {isExportModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
-            onClick={() => setIsExportModalOpen(false)}
-          />
-          {/* Container */}
-          <div className="fixed inset-0 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-100 bg-white p-6 shadow-2xl z-50 text-slate-700 font-sans"
-            >
-              <div className="flex items-start justify-between border-b border-slate-100 pb-3 mb-6">
-                <h3 className="font-display text-lg font-bold text-slate-950">
-                  Ekspor Data Kamar Santri
-                </h3>
-                <button
-                  onClick={() => setIsExportModalOpen(false)}
-                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer border-none bg-transparent"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <p className="text-xs text-slate-500 mb-5">
-                Pilih format keluaran untuk data kamar santri {genderFilter}{" "}
-                yang sedang aktif terfilter.
-              </p>
-
-              <div className="grid grid-cols-2 gap-4">
-                {/* Pilihan 1: Excel */}
-                <button
-                  onClick={() => {
-                    handleExportExcel();
-                    setIsExportModalOpen(false);
-                  }}
-                  className="flex flex-col items-center justify-center gap-3 p-5 rounded-2xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/20 group transition-all duration-250 cursor-pointer text-left outline-none bg-white"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 group-hover:scale-110 transition-transform">
-                    <FileSpreadsheet className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-900 group-hover:text-emerald-800 transition-colors text-center">
-                      Ekspor Excel
-                    </p>
-                    <p className="text-[10px] text-slate-400 mt-0.5 text-center">
-                      Format .XLS (Terfilter)
-                    </p>
-                  </div>
-                </button>
-
-                {/* Pilihan 2: PDF / Print */}
-                <button
-                  onClick={() => {
-                    handlePrintPDF();
-                    setIsExportModalOpen(false);
-                  }}
-                  className="flex flex-col items-center justify-center gap-3 p-5 rounded-2xl border border-slate-200 hover:border-rose-500 hover:bg-rose-50/20 group transition-all duration-250 cursor-pointer text-left outline-none bg-white"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-700 group-hover:scale-110 transition-transform">
-                    <Printer className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-900 group-hover:text-rose-800 transition-colors text-center">
-                      Cetak PDF
-                    </p>
-                    <p className="text-[10px] text-slate-400 mt-0.5 text-center">
-                      Tampilan Cetak (Terfilter)
-                    </p>
-                  </div>
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      )}
+      {/* Export Modal */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        subTab="kamar"
+        title="Ekspor Data Kamar Santri"
+        description={`Pilih format keluaran untuk data kamar santri ${genderFilter} yang sedang aktif terfilter.`}
+        defaultFileName={`Data_Kamar_Santri_${genderFilter}_${new Date().toISOString().split('T')[0]}`}
+        onExportExcel={(fileName) => handleExportExcel(fileName)}
+        onPrintPDF={(fileName) => handlePrintPDF(fileName)}
+      />
 
       {/* Pindah Kamar Modal */}
       {isMoveRoomModalOpen && (

@@ -171,21 +171,30 @@ export default function KamarSub({
     message: string;
     onConfirm: () => void;
     confirmText?: string;
+    isDanger?: boolean;
   }>({
     isOpen: false,
     title: '',
     message: '',
     onConfirm: () => {},
-    confirmText: 'Hapus'
+    confirmText: 'Konfirmasi',
+    isDanger: true
   });
 
-  const askConfirmation = (title: string, message: string, onConfirm: () => void, confirmText = 'Hapus') => {
+  const askConfirmation = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    confirmText = 'Konfirmasi',
+    isDanger = true
+  ) => {
     setConfirmModal({
       isOpen: true,
       title,
       message,
       onConfirm,
-      confirmText
+      confirmText,
+      isDanger
     });
   };
 
@@ -2314,7 +2323,9 @@ export default function KamarSub({
                             setActiveRoomForDetail(updated);
                             showToast(`Santri "${s.nama}" berhasil dijadikan Ketua Kamar.`);
                           }
-                        }
+                        },
+                        'Ya, Jadikan Ketua',
+                        false
                       );
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer"
@@ -2368,8 +2379,16 @@ export default function KamarSub({
               exit={{ opacity: 0, scale: 0.95 }}
               className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl space-y-4 text-center"
             >
-              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
-                <ShieldAlert className="w-6 h-6" />
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto ${
+                confirmModal.isDanger !== false
+                  ? 'bg-rose-100 text-rose-600'
+                  : 'bg-emerald-100 text-emerald-700'
+              }`}>
+                {confirmModal.isDanger !== false ? (
+                  <ShieldAlert className="w-6 h-6" />
+                ) : (
+                  <CheckCircle2 className="w-6 h-6" />
+                )}
               </div>
 
               <div>
@@ -2379,17 +2398,23 @@ export default function KamarSub({
 
               <div className="flex items-center justify-center gap-2 pt-2">
                 <button
+                  type="button"
                   onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     confirmModal.onConfirm();
                     setConfirmModal(prev => ({ ...prev, isOpen: false }));
                   }}
-                  className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-sm"
+                  className={`px-4 py-2 text-xs font-bold text-white rounded-xl shadow-sm cursor-pointer ${
+                    confirmModal.isDanger !== false
+                      ? 'bg-rose-600 hover:bg-rose-700'
+                      : 'bg-emerald-600 hover:bg-emerald-700'
+                  }`}
                 >
                   {confirmModal.confirmText || 'Konfirmasi'}
                 </button>

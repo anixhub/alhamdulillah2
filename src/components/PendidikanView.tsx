@@ -536,9 +536,71 @@ export default function PendidikanView({
   };
 
   const handleDeleteLembaga = async (id: string) => {
+    const classesOfLembaga = kelasList.filter(c => c.lembagaId === id);
+    const classNamesLower = classesOfLembaga.map(c => c.nama.trim().toLowerCase());
+    const deletedLembaga = lembagasList.find(l => l.id === id);
+
     setLembagasList(prev => prev.filter(l => l.id !== id));
-    // Cascade delete classes under this institution in state
     setKelasList(prev => prev.filter(c => c.lembagaId !== id));
+
+    if (deletedLembaga || classNamesLower.length > 0) {
+      const updatedSantriList = santriList.map(s => {
+        let changed = false;
+        let newKelas = s.kelas || '';
+        let newFormal = s.pendidikanFormal || '';
+        let newInternal = s.pendidikanInternal || '';
+
+        if (s.kelas) {
+          const sClasses = s.kelas.split(',').map(x => x.trim()).filter(Boolean);
+          const filteredClasses = sClasses.filter(cName => !classNamesLower.includes(cName.toLowerCase()));
+          if (filteredClasses.length !== sClasses.length) {
+            changed = true;
+            newKelas = filteredClasses.join(', ') || 'Tanpa Kelas';
+          }
+        }
+
+        if (s.pendidikanFormal && deletedLembaga) {
+          const lemNameLower = deletedLembaga.nama.trim().toLowerCase();
+          const kodeLower = (deletedLembaga.kode || '').trim().toLowerCase();
+          if (
+            s.pendidikanFormal.toLowerCase().includes(lemNameLower) ||
+            (kodeLower && s.pendidikanFormal.toLowerCase().includes(kodeLower)) ||
+            classNamesLower.some(cn => s.pendidikanFormal!.toLowerCase().includes(cn))
+          ) {
+            changed = true;
+            newFormal = '';
+          }
+        }
+
+        if (s.pendidikanInternal) {
+          const internalIds = s.pendidikanInternal.split(',').map(x => x.trim()).filter(Boolean);
+          if (internalIds.includes(id)) {
+            changed = true;
+            newInternal = internalIds.filter(x => x !== id).join(',');
+          }
+        }
+
+        if (!changed) return s;
+
+        const updatedStudent: Santri = {
+          ...s,
+          kelas: newKelas,
+          pendidikanFormal: newFormal,
+          pendidikanInternal: newInternal
+        };
+
+        if (onUpdateSantri) {
+          onUpdateSantri(updatedStudent);
+        } else {
+          updateTableRow('santri', 'smartsantri_santriList', s.id, updatedStudent).catch(() => {});
+        }
+
+        return updatedStudent;
+      });
+
+      setSantriList(updatedSantriList);
+    }
+
     await deleteTableRow('lembaga', 'smartsantri_lembagas', id);
   };
 
@@ -609,6 +671,84 @@ export default function PendidikanView({
   };
 
   const handleDeleteKelas = async (id: string) => {
+    const targetKelas = kelasList.find(c => c.id === id);
+    if (targetKelas) {
+      const classNameLower = targetKelas.nama.trim().toLowerCase();
+      const targetLembaga = lembagasList.find(l => l.id === targetKelas.lembagaId);
+      const isFormal = targetLembaga ? (
+        targetLembaga.jenis === 'Formal' || 
+        (!targetLembaga.jenis && !['madin','diniyah','tpq','tahfidz','pondok','kitab','internal'].some(k => (targetLembaga.nama || '').toLowerCase().includes(k)))
+      ) : false;
+
+      const remainingKelasList = kelasList.filter(c => c.id !== id);
+
+      const updatedSantriList = santriList.map(s => {
+        let changed = false;
+        let newKelas = s.kelas || '';
+        let newFormal = s.pendidikanFormal || '';
+        let newInternal = s.pendidikanInternal || '';
+
+        // Clean s.kelas
+        if (s.kelas) {
+          const sClasses = s.kelas.split(',').map(x => x.trim()).filter(Boolean);
+          const filteredClasses = sClasses.filter(cName => cName.toLowerCase() !== classNameLower);
+          if (filteredClasses.length !== sClasses.length) {
+            changed = true;
+            newKelas = filteredClasses.join(', ') || 'Tanpa Kelas';
+          }
+        }
+
+        // Check if student has any other class in this same lembagaId
+        const remainingClassesInSameLembaga = remainingKelasList.filter(c =>
+          c.lembagaId === targetKelas.lembagaId &&
+          (s.kelas || '').split(',').map(x => x.trim().toLowerCase()).includes(c.nama.trim().toLowerCase())
+        );
+
+        // Clean s.pendidikanFormal
+        if (isFormal && s.pendidikanFormal) {
+          if (s.pendidikanFormal.toLowerCase().includes(classNameLower)) {
+            changed = true;
+            if (remainingClassesInSameLembaga.length > 0) {
+              const otherClass = remainingClassesInSameLembaga[0];
+              newFormal = targetLembaga ? `${targetLembaga.nama} - ${otherClass.nama}` : otherClass.nama;
+            } else {
+              newFormal = '';
+            }
+          }
+        }
+
+        // Clean s.pendidikanInternal
+        if (targetKelas.lembagaId && s.pendidikanInternal) {
+          if (remainingClassesInSameLembaga.length === 0) {
+            const internalIds = s.pendidikanInternal.split(',').map(x => x.trim()).filter(Boolean);
+            if (internalIds.includes(targetKelas.lembagaId)) {
+              changed = true;
+              newInternal = internalIds.filter(x => x !== targetKelas.lembagaId).join(',');
+            }
+          }
+        }
+
+        if (!changed) return s;
+
+        const updatedStudent: Santri = {
+          ...s,
+          kelas: newKelas,
+          pendidikanFormal: newFormal,
+          pendidikanInternal: newInternal
+        };
+
+        if (onUpdateSantri) {
+          onUpdateSantri(updatedStudent);
+        } else {
+          updateTableRow('santri', 'smartsantri_santriList', s.id, updatedStudent).catch(() => {});
+        }
+
+        return updatedStudent;
+      });
+
+      setSantriList(updatedSantriList);
+    }
+
     setKelasList(prev => prev.filter(c => c.id !== id));
     await deleteTableRow('kelas', 'smartsantri_kelas', id);
   };

@@ -279,20 +279,6 @@ export default function SantriDetailModal({ selectedSantri, onClose, onUpdateSan
         };
       });
 
-      // If no match but we have a class text, create virtual records so it displays correctly
-      if (matched.length === 0 && localSantri.kelas && localSantri.kelas !== 'Tanpa Kelas') {
-        const rawClassNames = localSantri.kelas.split(',').map(name => name.trim());
-        return rawClassNames.map((name, i) => ({
-          id: `virtual-class-${i}`,
-          lembagaId: 'virtual-lem',
-          nama: name,
-          waliKelas: 'Ustadz / Wali Kelas',
-          tingkatan: 'Lainnya' as const,
-          lembagaNama: name.toLowerCase().includes('madin') || name.toLowerCase().includes('diniyah') ? 'Madrasah Diniyah' : 'Sekolah Formal',
-          lembagaKode: 'SCH'
-        }));
-      }
-
       return matched;
     } catch (e) {
       return [];

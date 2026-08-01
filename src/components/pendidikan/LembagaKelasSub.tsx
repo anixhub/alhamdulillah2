@@ -1505,8 +1505,11 @@ export default function LembagaKelasSub({
 
     const matchesSearch = (
       (s.nama || '').toLowerCase().includes(q) ||
-      (s.nis && s.nis.toLowerCase().includes(q)) ||
-      (s.kamar && s.kamar.toLowerCase().includes(q)) ||
+      (s.desa && s.desa.toLowerCase().includes(q)) ||
+      (s.kecamatan && s.kecamatan.toLowerCase().includes(q)) ||
+      (s.kabupaten && s.kabupaten.toLowerCase().includes(q)) ||
+      (s.alamat && s.alamat.toLowerCase().includes(q)) ||
+      (s.asal && s.asal.toLowerCase().includes(q)) ||
       (belongingName && belongingName.toLowerCase().includes(q))
     );
 
@@ -3890,7 +3893,7 @@ export default function LembagaKelasSub({
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                         <input
                           type="text"
-                          placeholder="Cari nama atau NIS..."
+                          placeholder="Cari nama atau alamat..."
                           value={addMemberSearch}
                           onChange={(e) => setAddMemberSearch(e.target.value)}
                           className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all font-medium"
@@ -4112,9 +4115,7 @@ export default function LembagaKelasSub({
                                     <div className="min-w-0">
                                       <p className="font-semibold text-slate-800 truncate group-hover:text-emerald-900">{student.nama}</p>
                                       <p className="text-[10px] text-slate-500 font-medium mt-0.5 truncate">
-                                        {student.nis || '-'}
-                                        <span className="mx-1 text-slate-300">|</span>
-                                        {student.kamar || '-'}
+                                        {[student.desa, student.kecamatan, student.kabupaten].filter(Boolean).map(x => x!.trim()).join(', ') || student.alamat || student.asal || '-'}
                                         <span className="mx-1 text-slate-300">|</span>
                                         <span className={sec.key !== 'Belum' ? 'text-amber-700 font-bold' : 'text-slate-400 font-normal'}>
                                           {sec.label}
@@ -4187,9 +4188,7 @@ export default function LembagaKelasSub({
                             <div className="min-w-0">
                               <p className="font-semibold text-slate-800 truncate">{student.nama}</p>
                               <p className="text-[10px] text-slate-500 font-medium mt-0.5 truncate">
-                                {student.nis || '-'}
-                                <span className="mx-1 text-slate-300">|</span>
-                                {student.kamar || '-'}
+                                {[student.desa, student.kecamatan, student.kabupaten].filter(Boolean).map(x => x!.trim()).join(', ') || student.alamat || student.asal || '-'}
                                 <span className="mx-1 text-slate-300">|</span>
                                 {(() => {
                                   if (activeTab === 'Rombel') {

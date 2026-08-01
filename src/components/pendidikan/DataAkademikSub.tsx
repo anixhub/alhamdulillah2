@@ -941,7 +941,7 @@ export default function DataAkademikSub({
   };
 
   // Excel Export Handler (XML Format compatible with Excel)
-  const handleExportExcel = () => {
+  const handleExportExcel = (customFileName?: string) => {
     const isKelas = academicType === 'internal';
     
     const dynamicHeaders: string[] = [];
@@ -1058,14 +1058,18 @@ export default function DataAkademikSub({
     const link = document.createElement('a');
     link.href = url;
     const dateStr = new Date().toISOString().split('T')[0];
-    link.setAttribute('download', `Data_Akademik_${academicType}_${genderFilter}_${dateStr}.xls`);
+    const defaultName = `Data_Akademik_${academicType}_${genderFilter}_${dateStr}.xls`;
+    const finalName = customFileName
+      ? (customFileName.toLowerCase().endsWith('.xls') || customFileName.toLowerCase().endsWith('.xlsx') ? customFileName : `${customFileName}.xls`)
+      : defaultName;
+    link.setAttribute('download', finalName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   // Print PDF Handler
-  const handlePrintPDF = () => {
+  const handlePrintPDF = (customFileName?: string) => {
     const profile = getPesantrenProfile();
     if (sortedSantri.length === 0) {
       alert('Tidak ada data santri untuk dicetak.');
@@ -1088,7 +1092,7 @@ export default function DataAkademikSub({
     let html = `
       <html>
       <head>
-        <title>LAPORAN DATA AKADEMIK ${academicType.toUpperCase()} SANTRI ${genderFilter.toUpperCase()} - SMART SANTRI</title>
+        <title>${customFileName ? customFileName.replace(/\.pdf$/i, '') : `LAPORAN DATA AKADEMIK ${academicType.toUpperCase()} SANTRI ${genderFilter.toUpperCase()} - SMART SANTRI`}</title>
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
@@ -2904,8 +2908,9 @@ export default function DataAkademikSub({
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         subTab="akademik"
-        onExportExcel={handleExportExcel}
-        onPrintPDF={handlePrintPDF}
+        defaultFileName={`Data_Akademik_${academicType}_${genderFilter}_${new Date().toISOString().split('T')[0]}`}
+        onExportExcel={(fileName) => handleExportExcel(fileName)}
+        onPrintPDF={(fileName) => handlePrintPDF(fileName)}
       />
 
       {/* --- SINGLE DETAIL MODAL MOUNT --- */}

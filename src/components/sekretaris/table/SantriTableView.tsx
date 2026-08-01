@@ -1482,10 +1482,18 @@ export default function SantriTableView({
 
                       if (!currentFormalLembaga && s.pendidikanFormal) {
                         const parts = s.pendidikanFormal.split(' - ');
-                        currentDisplay = parts.length > 1 ? parts.slice(1).join(' - ') : s.pendidikanFormal;
+                        const rawClsName = parts.length > 1 ? parts.slice(1).join(' - ').trim() : s.pendidikanFormal.trim();
                         for (const fl of formalLembagas) {
                           if (s.pendidikanFormal.toLowerCase().includes(fl.nama.toLowerCase()) || (fl.kode && s.pendidikanFormal.toLowerCase().includes(fl.kode.toLowerCase()))) {
                             currentFormalLembaga = fl;
+                            const classesOfFl = kelasList.filter(k => String(k.lembagaId || (k as any).lembaga_id) === String(fl.id));
+                            const matchCls = classesOfFl.find(k => k.nama && k.nama.trim().toLowerCase() === rawClsName.toLowerCase());
+                            if (matchCls) {
+                              currentFormalClass = matchCls;
+                              currentDisplay = matchCls.nama;
+                            } else {
+                              currentDisplay = "Calon Peserta Didik";
+                            }
                             break;
                           }
                         }
