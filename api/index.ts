@@ -415,7 +415,7 @@ async function ensureTableExists(table: string, pool: mysql.Pool) {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
-      const columnsToEnsure = ['sender_username', 'sender_name', 'sender_role', 'recipient_role', 'message', 'reply_to'];
+      const columnsToEnsure = ['sender_username', 'sender_name', 'sender_role', 'sender_avatar', 'recipient_role', 'message', 'text', 'timestamp', 'sender', 'senderRole', 'reply_to'];
       for (const col of columnsToEnsure) {
         try {
           await pool.query(`ALTER TABLE \`admin_chat\` ADD COLUMN \`${col}\` LONGTEXT NULL`);

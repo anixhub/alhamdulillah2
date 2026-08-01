@@ -61,7 +61,9 @@ export interface ChatMessage {
   sender?: string;
   senderRole?: string;
   sender_avatar?: string;
+  senderAvatar?: string;
   recipient_role?: string;
+  channel?: string;
   message?: string;
   text?: string;
   attachment?: ChatAttachment;
@@ -70,6 +72,7 @@ export interface ChatMessage {
   is_edited?: boolean;
   edited_at?: string;
   created_at: string;
+  timestamp?: string;
 }
 
 interface AdminChatDrawerProps {
@@ -223,9 +226,53 @@ export default function AdminChatDrawer({
   const imageFileInputRef = useRef<HTMLInputElement>(null);
 
   // Active User Info
-  const currentUsername = localStorage.getItem('smartsantri_active_username') || 'pengurus@attaroqqy.com';
-  const currentDisplayName = localStorage.getItem('smartsantri_active_display_name') || 'Admin Pengurus';
+  const currentUsername = localStorage.getItem('smartsantri_active_username') || 'superadmin@attaroqqy.com';
+  const currentDisplayName = localStorage.getItem('smartsantri_active_display_name') || 'Admin Utama';
   const currentRole = localStorage.getItem('smartsantri_active_role') || 'superadmin';
+
+  // Helper to normalize message structure from DB / WebSocket / LocalStorage
+  const normalizeChatMessage = (msg: any): ChatMessage => {
+    if (!msg) return msg;
+
+    let attachment = msg.attachment;
+    if (typeof attachment === 'string') {
+      try {
+        attachment = JSON.parse(attachment);
+      } catch (e) {
+        attachment = undefined;
+      }
+    }
+
+    let reply_to = msg.reply_to || msg.replyTo;
+    if (typeof reply_to === 'string') {
+      try {
+        reply_to = JSON.parse(reply_to);
+      } catch (e) {
+        reply_to = undefined;
+      }
+    }
+
+    const senderUsername = msg.sender_username || msg.sender || '';
+    const senderName = msg.sender_name || (msg.sender && !msg.sender.includes('@') ? msg.sender : '') || msg.sender || 'Admin';
+    const senderRole = msg.sender_role || msg.senderRole || 'Admin';
+    const messageText = msg.message || msg.text || '';
+    const createdAt = msg.created_at || msg.timestamp || new Date().toISOString();
+    const avatar = msg.sender_avatar || msg.senderAvatar || undefined;
+
+    return {
+      ...msg,
+      id: String(msg.id || Date.now()),
+      sender_username: senderUsername,
+      sender_name: senderName,
+      sender_role: senderRole,
+      sender_avatar: avatar,
+      recipient_role: msg.recipient_role || msg.channel || 'semua',
+      message: messageText,
+      created_at: createdAt,
+      attachment,
+      reply_to
+    };
+  };
 
   useEffect(() => {
     loadChatMessages();
@@ -424,19 +471,21 @@ export default function AdminChatDrawer({
   useEffect(() => {
     const unsubscribe = subscribeRealtimeChanges((payload: any) => {
       if (payload.type === 'admin_chat_message' && payload.message) {
+        const normalized = normalizeChatMessage(payload.message);
         setMessages(prev => {
-          const exists = prev.some(m => String(m.id) === String(payload.message.id));
+          const exists = prev.some(m => String(m.id) === String(normalized.id));
           if (exists) {
-            return prev.map(m => String(m.id) === String(payload.message.id) ? payload.message : m);
+            return prev.map(m => String(m.id) === String(normalized.id) ? normalized : m);
           }
-          const updated = [...prev, payload.message];
+          const updated = [...prev, normalized];
           safeLocalStorageSetItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
           return updated;
         });
         setTimeout(scrollToBottom, 50);
       } else if (payload.type === 'admin_chat_update' && payload.message) {
+        const normalized = normalizeChatMessage(payload.message);
         setMessages(prev => {
-          const updated = prev.map(m => String(m.id) === String(payload.message.id) ? payload.message : m);
+          const updated = prev.map(m => String(m.id) === String(normalized.id) ? normalized : m);
           safeLocalStorageSetItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
           return updated;
         });
@@ -456,14 +505,16 @@ export default function AdminChatDrawer({
     setLoading(true);
     try {
       const local = localStorage.getItem(LOCAL_STORAGE_KEY);
-      let initialList: ChatMessage[] = local ? JSON.parse(local) : [];
+      let rawList: any[] = local ? JSON.parse(local) : [];
 
-      const remoteData = await fetchTableData<ChatMessage>('admin_chat', LOCAL_STORAGE_KEY, initialList);
+      const remoteData = await fetchTableData<any>('admin_chat', LOCAL_STORAGE_KEY, rawList);
       if (Array.isArray(remoteData) && remoteData.length > 0) {
-        initialList = remoteData;
-        safeLocalStorageSetItem(LOCAL_STORAGE_KEY, JSON.stringify(initialList));
+        rawList = remoteData;
       }
-      setMessages(initialList);
+
+      const normalizedList = rawList.map(normalizeChatMessage);
+      safeLocalStorageSetItem(LOCAL_STORAGE_KEY, JSON.stringify(normalizedList));
+      setMessages(normalizedList);
     } catch (err) {
       console.warn('Menggunakan data obrolan lokal:', err);
     } finally {
@@ -716,20 +767,29 @@ export default function AdminChatDrawer({
     }
 
     // New Message Creation
+    const nowIso = new Date().toISOString();
+    const avatarUrl = localStorage.getItem('smartsantri_active_avatar') || undefined;
+
     const newMsg: ChatMessage = {
       id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       sender_username: currentUsername,
       sender_name: currentDisplayName,
       sender_role: currentRole,
+      sender_avatar: avatarUrl,
+      sender: currentUsername,
+      senderRole: currentRole,
+      senderAvatar: avatarUrl,
       recipient_role: activeChannel,
       message: trimmed,
+      text: trimmed,
       attachment: pendingAttachment || undefined,
       reply_to: replyToMsg ? {
         id: replyToMsg.id,
-        sender_name: replyToMsg.sender_name === currentDisplayName ? 'Anda' : replyToMsg.sender_name,
-        message: replyToMsg.message || (replyToMsg.attachment ? `[File: ${replyToMsg.attachment.name}]` : 'Lampiran')
+        sender_name: replyToMsg.sender_name === currentDisplayName ? 'Anda' : (replyToMsg.sender_name || replyToMsg.sender || 'Admin'),
+        message: replyToMsg.message || replyToMsg.text || (replyToMsg.attachment ? `[File: ${replyToMsg.attachment.name}]` : 'Lampiran')
       } : undefined,
-      created_at: new Date().toISOString()
+      created_at: nowIso,
+      timestamp: nowIso
     };
 
     setMessages(prev => {
@@ -843,9 +903,19 @@ export default function AdminChatDrawer({
     setTimeout(() => setCopiedMsgId(null), 2000);
   };
 
-  const formatTime = (isoString: string) => {
+  const formatTime = (isoString?: string) => {
+    if (!isoString) return '';
     try {
-      const date = new Date(isoString);
+      let str = String(isoString).trim();
+      if (str.includes(' ') && !str.includes('T')) {
+        str = str.replace(' ', 'T');
+      }
+      const date = new Date(str);
+      if (isNaN(date.getTime())) {
+        const timeMatch = str.match(/\b\d{2}:\d{2}\b/);
+        if (timeMatch) return timeMatch[0];
+        return '';
+      }
       return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
     } catch (e) {
       return '';
@@ -1318,13 +1388,24 @@ export default function AdminChatDrawer({
               </div>
             ) : (
               filteredMessages.map((msg) => {
-                const senderUsername = (msg.sender_username || msg.sender || '').toLowerCase();
-                const senderNameStr = (msg.sender_name || msg.sender || '').toLowerCase();
-                const myUsername = (currentUsername || '').toLowerCase();
-                const myDisplayName = (currentDisplayName || '').toLowerCase();
+                const senderUsername = (msg.sender_username || msg.sender || '').trim().toLowerCase();
+                const senderNameStr = (msg.sender_name || (msg.sender && !msg.sender.includes('@') ? msg.sender : '') || '').trim().toLowerCase();
+                const myUsername = (currentUsername || 'superadmin@attaroqqy.com').trim().toLowerCase();
+                const myDisplayName = (currentDisplayName || 'Admin Utama').trim().toLowerCase();
+                const myRole = (currentRole || 'superadmin').trim().toLowerCase();
 
-                const isMe = (Boolean(senderUsername) && senderUsername === myUsername) ||
-                             (Boolean(senderNameStr) && senderNameStr === myDisplayName);
+                const myUserPrefix = myUsername.split('@')[0];
+                const senderUserPrefix = senderUsername.split('@')[0];
+
+                const isMe =
+                  (Boolean(senderUsername) && (senderUsername === myUsername || (Boolean(senderUserPrefix) && senderUserPrefix === myUserPrefix))) ||
+                  (Boolean(senderNameStr) && (senderNameStr === myDisplayName || senderNameStr === myUsername)) ||
+                  (myRole === 'superadmin' && (senderUsername === 'superadmin' || senderUsername === 'admin' || senderNameStr === 'admin' || senderNameStr === 'admin utama' || senderNameStr === 'superadmin attaroqqy'));
+
+                const displaySenderName = (msg.sender_name && msg.sender_name.trim() !== 'Admin' ? msg.sender_name : '') ||
+                                          (senderUsername ? senderUsername.split('@')[0] : '') ||
+                                          msg.sender ||
+                                          'Admin';
 
                 return (
                   <div
@@ -1332,61 +1413,49 @@ export default function AdminChatDrawer({
                     id={`msg-${msg.id}`}
                     className={`flex flex-col group ${isMe ? 'items-end' : 'items-start'} rounded-2xl transition-all duration-300`}
                   >
-                    {/* Sender Label for Received Messages */}
-                    {!isMe && (
-                      <div className="flex items-center gap-1.5 mb-1 px-1 text-[11px] font-bold text-slate-700">
-                        <span>{msg.sender_name || msg.sender || 'Admin'}</span>
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 font-extrabold uppercase">
-                          {msg.sender_role || msg.senderRole || 'Admin'}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Message Bubble Box */}
-                    <div className="relative max-w-[88%] sm:max-w-[82%] min-w-[150px]">
-                      {/* Hover ChevronDown (v) Button */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMsgMenuId(activeMsgMenuId === msg.id ? null : msg.id);
-                        }}
-                        className={`absolute top-1.5 right-1.5 z-20 p-1 rounded-full transition-all cursor-pointer opacity-0 group-hover:opacity-100 ${
-                          activeMsgMenuId === msg.id ? 'opacity-100 bg-black/10' : ''
-                        } ${
-                          isMe ? 'text-purple-800 hover:bg-purple-200/80' : 'text-slate-500 hover:bg-slate-200/80'
-                        }`}
-                        title="Opsi Pesan"
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </button>
-
-                      {/* Dropdown Options Popup Menu */}
-                      {activeMsgMenuId === msg.id && (
-                        <div 
-                          ref={msgMenuRef}
-                          className="absolute top-8 right-1 z-50 w-36 rounded-2xl bg-white p-1.5 shadow-2xl border border-slate-200 text-xs font-semibold animate-in fade-in zoom-in-95 duration-100"
+                    {isMe ? (
+                      /* USER SENT MESSAGE (RIGHT ALIGNED) */
+                      <div className="relative max-w-[88%] sm:max-w-[82%] min-w-[150px]">
+                        {/* Hover ChevronDown (v) Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMsgMenuId(activeMsgMenuId === msg.id ? null : msg.id);
+                          }}
+                          className={`absolute top-1.5 right-1.5 z-20 p-1 rounded-full transition-all cursor-pointer opacity-0 group-hover:opacity-100 ${
+                            activeMsgMenuId === msg.id ? 'opacity-100 bg-black/10' : ''
+                          } text-purple-800 hover:bg-purple-200/80`}
+                          title="Opsi Pesan"
                         >
-                          <button
-                            type="button"
-                            onClick={() => handleStartReply(msg)}
-                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-slate-700 hover:bg-purple-50 hover:text-purple-900 transition-colors cursor-pointer"
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+
+                        {/* Dropdown Options Popup Menu */}
+                        {activeMsgMenuId === msg.id && (
+                          <div 
+                            ref={msgMenuRef}
+                            className="absolute top-8 right-1 z-50 w-36 rounded-2xl bg-white p-1.5 shadow-2xl border border-slate-200 text-xs font-semibold animate-in fade-in zoom-in-95 duration-100"
                           >
-                            <Reply className="h-3.5 w-3.5 text-purple-600" />
-                            <span>Balas</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              handleCopyText(msg.message, msg.id);
-                              setActiveMsgMenuId(null);
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-slate-700 hover:bg-purple-50 hover:text-purple-900 transition-colors cursor-pointer"
-                          >
-                            <Copy className="h-3.5 w-3.5 text-blue-600" />
-                            <span>Salin</span>
-                          </button>
-                          {isMe && (
+                            <button
+                              type="button"
+                              onClick={() => handleStartReply(msg)}
+                              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-slate-700 hover:bg-purple-50 hover:text-purple-900 transition-colors cursor-pointer"
+                            >
+                              <Reply className="h-3.5 w-3.5 text-purple-600" />
+                              <span>Balas</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleCopyText(msg.message, msg.id);
+                                setActiveMsgMenuId(null);
+                              }}
+                              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-slate-700 hover:bg-purple-50 hover:text-purple-900 transition-colors cursor-pointer"
+                            >
+                              <Copy className="h-3.5 w-3.5 text-blue-600" />
+                              <span>Salin</span>
+                            </button>
                             <button
                               type="button"
                               onClick={() => {
@@ -1398,8 +1467,6 @@ export default function AdminChatDrawer({
                               <Pencil className="h-3.5 w-3.5 text-amber-600" />
                               <span>Edit</span>
                             </button>
-                          )}
-                          {(isMe || currentRole === 'superadmin') && (
                             <button
                               type="button"
                               onClick={() => {
@@ -1411,15 +1478,12 @@ export default function AdminChatDrawer({
                               <Trash2 className="h-3.5 w-3.5" />
                               <span>Hapus</span>
                             </button>
-                          )}
-                        </div>
-                      )}
+                          </div>
+                        )}
 
-                      {/* BUBBLE CONTENT */}
-                      {isMe ? (
-                        /* User Sent Bubble */
+                        {/* User Sent Bubble */}
                         <div className="rounded-[20px] rounded-tr-xs p-3 pr-7 bg-[#f0ebff] text-[#4c1d95] text-xs sm:text-sm font-medium leading-relaxed shadow-2xs border border-purple-200/60">
-                          {/* Replied Quote Box (if reply_to exists) */}
+                          {/* Replied Quote Box */}
                           {msg.reply_to && (
                             <div 
                               onClick={() => scrollToMsg(msg.reply_to!.id)}
@@ -1479,71 +1543,157 @@ export default function AdminChatDrawer({
                             <span>{formatTime(msg.created_at)}</span>
                           </div>
                         </div>
-                      ) : (
-                        /* Received Message Bubble */
-                        <div className="rounded-[20px] rounded-tl-xs p-3 pr-7 bg-white text-slate-800 text-xs sm:text-sm font-normal leading-relaxed shadow-2xs border border-slate-200/90">
-                          {/* Replied Quote Box (if reply_to exists) */}
-                          {msg.reply_to && (
-                            <div 
-                              onClick={() => scrollToMsg(msg.reply_to!.id)}
-                              className="mb-2 rounded-xl bg-slate-100 border-l-[4px] border-amber-700 p-2 text-xs flex flex-col cursor-pointer hover:bg-slate-200/60 transition-colors"
+                      </div>
+                    ) : (
+                      /* RECEIVED MESSAGE (LEFT ALIGNED WITH AVATAR CIRCLE & NAME) */
+                      <div className="flex items-start gap-2.5 max-w-[92%] sm:max-w-[85%]">
+                        {/* Avatar Circle */}
+                        {msg.sender_avatar ? (
+                          <img
+                            src={msg.sender_avatar}
+                            alt={displaySenderName || 'Avatar'}
+                            className="w-8 h-8 rounded-full object-cover border border-purple-200 shadow-2xs shrink-0 mt-0.5"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 via-indigo-600 to-purple-800 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs border border-white mt-0.5 select-none">
+                            {(displaySenderName || 'A').trim().charAt(0).toUpperCase()}
+                          </div>
+                        )}
+
+                        {/* Content Container */}
+                        <div className="flex flex-col min-w-0 flex-1">
+                          {/* Sender Name & Role Label */}
+                          <div className="flex items-center gap-1.5 mb-1 px-0.5 text-[11px] font-bold text-slate-800">
+                            <span>{displaySenderName}</span>
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-extrabold uppercase">
+                              {msg.sender_role || msg.senderRole || 'Admin'}
+                            </span>
+                          </div>
+
+                          {/* Message Bubble Box */}
+                          <div className="relative min-w-[150px]">
+                            {/* Hover ChevronDown (v) Button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMsgMenuId(activeMsgMenuId === msg.id ? null : msg.id);
+                              }}
+                              className={`absolute top-1.5 right-1.5 z-20 p-1 rounded-full transition-all cursor-pointer opacity-0 group-hover:opacity-100 ${
+                                activeMsgMenuId === msg.id ? 'opacity-100 bg-black/10' : ''
+                              } text-slate-500 hover:bg-slate-200/80`}
+                              title="Opsi Pesan"
                             >
-                              <span className="font-bold text-amber-800 text-[11px] truncate">
-                                {msg.reply_to.sender_name}
-                              </span>
-                              <p className="text-slate-600 text-[11px] truncate font-normal mt-0.5">
-                                {msg.reply_to.message}
-                              </p>
-                            </div>
-                          )}
+                              <ChevronDown className="h-4 w-4" />
+                            </button>
 
-                          {/* Message Text */}
-                          {msg.message && (
-                            <p className="whitespace-pre-wrap">{renderFormattedMessageText(msg.message)}</p>
-                          )}
-
-                          {/* Attachment */}
-                          {msg.attachment && (
-                            <div className="mt-2 rounded-xl overflow-hidden bg-slate-50 p-2 border border-slate-200">
-                              {msg.attachment.type === 'image' ? (
-                                <div>
-                                  <img 
-                                    src={msg.attachment.url} 
-                                    alt={msg.attachment.name} 
-                                    onClick={() => setPreviewImageModal({ url: msg.attachment!.url, name: msg.attachment!.name })}
-                                    className="max-h-56 w-full object-cover rounded-lg mb-1 cursor-pointer hover:opacity-90 transition-opacity shadow-xs" 
-                                  />
-                                  <div className="flex items-center justify-between text-[10px] text-slate-600 font-bold px-1">
-                                    <span className="truncate">{msg.attachment.name}</span>
-                                  </div>
-                                </div>
-                              ) : (
-                                <a 
-                                  href={msg.attachment.url} 
-                                  download={msg.attachment.name} 
-                                  target="_blank" 
-                                  rel="noreferrer"
-                                  className="flex items-center gap-2 p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-800"
+                            {/* Dropdown Options Popup Menu */}
+                            {activeMsgMenuId === msg.id && (
+                              <div 
+                                ref={msgMenuRef}
+                                className="absolute top-8 right-1 z-50 w-36 rounded-2xl bg-white p-1.5 shadow-2xl border border-slate-200 text-xs font-semibold animate-in fade-in zoom-in-95 duration-100"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartReply(msg)}
+                                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-slate-700 hover:bg-purple-50 hover:text-purple-900 transition-colors cursor-pointer"
                                 >
-                                  <FileText className="h-5 w-5 text-purple-600 shrink-0" />
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-xs font-bold truncate">{msg.attachment.name}</p>
-                                    <p className="text-[9px] text-slate-500 font-medium">{formatFileSize(msg.attachment.size)}</p>
-                                  </div>
-                                  <Download className="h-4 w-4 shrink-0 text-slate-500" />
-                                </a>
-                              )}
-                            </div>
-                          )}
+                                  <Reply className="h-3.5 w-3.5 text-purple-600" />
+                                  <span>Balas</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleCopyText(msg.message, msg.id);
+                                    setActiveMsgMenuId(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-slate-700 hover:bg-purple-50 hover:text-purple-900 transition-colors cursor-pointer"
+                                >
+                                  <Copy className="h-3.5 w-3.5 text-blue-600" />
+                                  <span>Salin</span>
+                                </button>
+                                {currentRole === 'superadmin' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setConfirmDeleteId(msg.id);
+                                      setActiveMsgMenuId(null);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer border-t border-slate-100 mt-1 pt-1.5"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    <span>Hapus</span>
+                                  </button>
+                                )}
+                              </div>
+                            )}
 
-                          {/* WhatsApp Style Bottom Right Time */}
-                          <div className="flex items-center justify-end gap-1 mt-1 text-[10px] text-slate-400 font-medium select-none">
-                            {msg.is_edited && <span className="italic font-bold text-purple-600 mr-0.5">(edited)</span>}
-                            <span>{formatTime(msg.created_at)}</span>
+                            {/* Received Message Bubble */}
+                            <div className="rounded-[20px] rounded-tl-xs p-3 pr-7 bg-white text-slate-800 text-xs sm:text-sm font-normal leading-relaxed shadow-2xs border border-slate-200/90">
+                              {/* Replied Quote Box */}
+                              {msg.reply_to && (
+                                <div 
+                                  onClick={() => scrollToMsg(msg.reply_to!.id)}
+                                  className="mb-2 rounded-xl bg-slate-100 border-l-[4px] border-amber-700 p-2 text-xs flex flex-col cursor-pointer hover:bg-slate-200/60 transition-colors"
+                                >
+                                  <span className="font-bold text-amber-800 text-[11px] truncate">
+                                    {msg.reply_to.sender_name}
+                                  </span>
+                                  <p className="text-slate-600 text-[11px] truncate font-normal mt-0.5">
+                                    {msg.reply_to.message}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Message Text */}
+                              {msg.message && (
+                                <p className="whitespace-pre-wrap">{renderFormattedMessageText(msg.message)}</p>
+                              )}
+
+                              {/* Attachment */}
+                              {msg.attachment && (
+                                <div className="mt-2 rounded-xl overflow-hidden bg-slate-50 p-2 border border-slate-200">
+                                  {msg.attachment.type === 'image' ? (
+                                    <div>
+                                      <img 
+                                        src={msg.attachment.url} 
+                                        alt={msg.attachment.name} 
+                                        onClick={() => setPreviewImageModal({ url: msg.attachment!.url, name: msg.attachment!.name })}
+                                        className="max-h-56 w-full object-cover rounded-lg mb-1 cursor-pointer hover:opacity-90 transition-opacity shadow-xs" 
+                                      />
+                                      <div className="flex items-center justify-between text-[10px] text-slate-600 font-bold px-1">
+                                        <span className="truncate">{msg.attachment.name}</span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <a 
+                                      href={msg.attachment.url} 
+                                      download={msg.attachment.name} 
+                                      target="_blank" 
+                                      rel="noreferrer"
+                                      className="flex items-center gap-2 p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-800"
+                                    >
+                                      <FileText className="h-5 w-5 text-purple-600 shrink-0" />
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-xs font-bold truncate">{msg.attachment.name}</p>
+                                        <p className="text-[9px] text-slate-500 font-medium">{formatFileSize(msg.attachment.size)}</p>
+                                      </div>
+                                      <Download className="h-4 w-4 shrink-0 text-slate-500" />
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* WhatsApp Style Bottom Right Time */}
+                              <div className="flex items-center justify-end gap-1 mt-1 text-[10px] text-slate-400 font-medium select-none">
+                                {msg.is_edited && <span className="italic font-bold text-purple-600 mr-0.5">(edited)</span>}
+                                <span>{formatTime(msg.created_at)}</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 );
               })
