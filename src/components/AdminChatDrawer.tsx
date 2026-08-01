@@ -823,7 +823,9 @@ export default function AdminChatDrawer({
       attachment: pendingAttachment || undefined,
       reply_to: replyToMsg ? {
         id: replyToMsg.id,
-        sender_name: replyToMsg.sender_name === currentDisplayName ? 'Anda' : (replyToMsg.sender_name || replyToMsg.sender || 'Admin'),
+        sender_name: (replyToMsg.sender_username && replyToMsg.sender_username.toLowerCase() === currentUsername.toLowerCase())
+          ? 'Anda' 
+          : (replyToMsg.sender_name || replyToMsg.sender || 'Admin'),
         message: replyToMsg.message || replyToMsg.text || (replyToMsg.attachment ? `[File: ${replyToMsg.attachment.name}]` : 'Lampiran')
       } : undefined,
       created_at: nowIso,
@@ -1427,22 +1429,15 @@ export default function AdminChatDrawer({
               </div>
             ) : (
               filteredMessages.map((msg) => {
-                const senderUsername = (msg.sender_username || msg.sender || '').trim().toLowerCase();
-                const senderNameStr = (msg.sender_name || (msg.sender && !msg.sender.includes('@') ? msg.sender : '') || '').trim().toLowerCase();
-                const myUsername = (currentUsername || 'superadmin@attaroqqy.com').trim().toLowerCase();
-                const myDisplayName = (currentDisplayName || 'Admin Utama').trim().toLowerCase();
-                const myRole = (currentRole || 'superadmin').trim().toLowerCase();
+                const senderUsername = (msg.sender_username || (msg.sender && msg.sender.includes('@') ? msg.sender : '') || '').trim().toLowerCase();
+                const myUsername = (currentUsername || '').trim().toLowerCase();
 
-                const myUserPrefix = myUsername.split('@')[0];
-                const senderUserPrefix = senderUsername.split('@')[0];
-
-                const isMe =
-                  (Boolean(senderUsername) && (senderUsername === myUsername || (Boolean(senderUserPrefix) && senderUserPrefix === myUserPrefix))) ||
-                  (Boolean(senderNameStr) && (senderNameStr === myDisplayName || senderNameStr === myUsername)) ||
-                  (myRole === 'superadmin' && (senderUsername === 'superadmin' || senderUsername === 'admin' || senderNameStr === 'admin' || senderNameStr === 'admin utama' || senderNameStr === 'superadmin attaroqqy'));
+                const isMe = Boolean(senderUsername) && Boolean(myUsername)
+                  ? (senderUsername === myUsername)
+                  : (Boolean(msg.sender) && Boolean(myUsername) && msg.sender.trim().toLowerCase() === myUsername);
 
                 const displaySenderName = (msg.sender_name && msg.sender_name.trim() !== 'Admin' ? msg.sender_name : '') ||
-                                          (senderUsername ? senderUsername.split('@')[0] : '') ||
+                                          (senderUsername ? senderUsername : '') ||
                                           msg.sender ||
                                           'Admin';
 
@@ -1752,7 +1747,7 @@ export default function AdminChatDrawer({
                 <div className="min-w-0 flex-1 pr-2">
                   <div className="flex items-center gap-1.5 font-bold text-purple-900 text-[11px]">
                     <Reply className="h-3.5 w-3.5 text-purple-700 shrink-0" />
-                    <span>Membalas {replyToMsg.sender_name === currentDisplayName ? 'Anda' : replyToMsg.sender_name}</span>
+                    <span>Membalas {(replyToMsg.sender_username && replyToMsg.sender_username.toLowerCase() === currentUsername.toLowerCase()) ? 'Anda' : (replyToMsg.sender_name || 'Admin')}</span>
                   </div>
                   <p className="text-slate-600 truncate text-[11px] mt-0.5 font-normal">
                     {replyToMsg.message || (replyToMsg.attachment ? `[File: ${replyToMsg.attachment.name}]` : '')}

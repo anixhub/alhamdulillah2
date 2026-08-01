@@ -78,21 +78,29 @@ export default function App() {
     const currentPrefix = currentUsername.split('@')[0];
 
     const unsubscribe = subscribeRealtimeChanges((payload: any) => {
-      if ((payload.type === 'admin_chat_message' && payload.message) || (payload.table === 'admin_chat' && payload.action === 'insert')) {
-        const msgObj = payload.message || payload.record;
-        if (msgObj && msgObj.message) {
-          const lowerMsg = String(msgObj.message).toLowerCase();
-          const isMentioned = lowerMsg.includes(`@${currentRole}`) || 
-                              lowerMsg.includes(`@${currentUsername}`) || 
-                              (currentPrefix && lowerMsg.includes(`@${currentPrefix}`)) ||
-                              lowerMsg.includes('@admin');
-          if (isMentioned) {
-            setHasMentionNotification(true);
+      if (
+        (payload.type === 'admin_chat_message' && payload.message) || 
+        (payload.table === 'admin_chat' && (payload.action === 'insert' || payload.event === 'db_change'))
+      ) {
+        const rawObj = payload.message || payload.data || payload.record;
+        if (!rawObj) return;
+
+        const msgList = Array.isArray(rawObj) ? rawObj : [rawObj];
+        msgList.forEach((msgObj: any) => {
+          if (msgObj && (msgObj.message || msgObj.text)) {
+            const lowerMsg = String(msgObj.message || msgObj.text).toLowerCase();
+            const isMentioned = lowerMsg.includes(`@${currentRole}`) || 
+                                lowerMsg.includes(`@${currentUsername}`) || 
+                                (currentPrefix && lowerMsg.includes(`@${currentPrefix}`)) ||
+                                lowerMsg.includes('@admin');
+            if (isMentioned) {
+              setHasMentionNotification(true);
+            }
           }
-        }
+        });
 
         if (!isChatOpen) {
-          setUnreadChatCount(prev => prev + 1);
+          setUnreadChatCount(prev => prev + (Array.isArray(rawObj) ? rawObj.length : 1));
         }
       }
     });

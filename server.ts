@@ -27,14 +27,15 @@ async function startServer() {
     ws.on("message", (raw: any) => {
       try {
         const msg = JSON.parse(raw.toString());
-        if (msg.type === "presence_join" && msg.user) {
+        if (msg.type === "ping") {
+          ws.send(JSON.stringify({ type: "pong", timestamp: Date.now() }));
+        } else if (msg.type === "presence_join" && msg.user) {
           connectedUserId = msg.user.id || Math.random().toString(36).substring(2);
           onlineUsers.set(connectedUserId, { ...msg.user, id: connectedUserId, lastSeen: Date.now() });
           broadcastWebSocketMessage({ type: "online_users", users: Array.from(onlineUsers.values()) });
-        } else if (msg.type === "admin_chat_message" || msg.type === "chat_message") {
+        } else {
+          // Broadcast all real-time events (admin_chat_message, admin_chat_update, admin_chat_delete, db_change, etc.) instantly
           broadcastWebSocketMessage(msg);
-        } else if (msg.type === "ping") {
-          ws.send(JSON.stringify({ type: "pong", timestamp: Date.now() }));
         }
       } catch (err) {
         console.error("Error handling WebSocket message:", err);
