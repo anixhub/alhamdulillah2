@@ -1949,21 +1949,21 @@ export default function SantriTableView({
                 )}
 
                 {shouldShowColumn('catatan') && (
-                  <td className={`px-3 py-4 text-xs text-slate-500 max-w-[180px] truncate w-[180px] min-w-[180px] ${
+                  <td className={`px-3 py-4 text-xs text-slate-500 max-w-[180px] w-[180px] min-w-[180px] ${
                     isMonitoringMode && isCellEmpty(s, 'catatan') ? '!bg-rose-100/90 !text-rose-800 font-medium' : ''
                   }`}>
                     {s.statusEmis === 'Invalid' ? (() => {
                       const { prefixNote, invalidReason, suffixNote } = parseCatatanInvalidParts(s.catatan);
                       return (
                         <div 
-                          className="inline-flex flex-wrap items-center gap-1 text-[11px] font-semibold max-w-full"
+                          className="text-[11px] leading-relaxed text-slate-700 font-medium whitespace-pre-wrap break-words max-w-full"
                           title="Status EMIS Invalid"
                         >
-                          {prefixNote ? <span className="truncate text-slate-700 max-w-[80px] font-medium">{prefixNote}</span> : null}
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 text-[10.5px] font-bold shrink-0 select-none">
+                          {prefixNote ? <span>{prefixNote} </span> : null}
+                          <span className="inline-block px-1.5 py-0.5 my-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 text-[10.5px] font-bold select-none align-baseline">
                             {invalidReason}
                           </span>
-                          {suffixNote ? <span className="truncate text-slate-700 max-w-[80px] font-medium">{suffixNote}</span> : null}
+                          {suffixNote ? <span> {suffixNote}</span> : null}
                         </div>
                       );
                     })() : (

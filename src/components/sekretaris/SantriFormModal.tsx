@@ -25,6 +25,71 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
+function getCaretPositionRelativeChip(chipNode: Node, sel: Selection): 'before' | 'after' | 'none' {
+  if (!sel || sel.rangeCount === 0) return 'none';
+  const range = sel.getRangeAt(0);
+  if (!range.collapsed) return 'none';
+
+  const node = range.startContainer;
+  const offset = range.startOffset;
+
+  if (node === chipNode.parentNode) {
+    const children = Array.from(node.childNodes);
+    const chipIdx = children.indexOf(chipNode as ChildNode);
+    if (offset === chipIdx) return 'before';
+    if (offset === chipIdx + 1) return 'after';
+  }
+
+  if (node === chipNode) {
+    if (offset === 0) return 'before';
+    return 'after';
+  }
+
+  if (node === chipNode.previousSibling || chipNode.previousSibling?.contains(node)) {
+    const textLen = node.textContent?.length || 0;
+    if (offset === textLen) return 'before';
+  }
+
+  if (node === chipNode.nextSibling || chipNode.nextSibling?.contains(node)) {
+    if (offset === 0) return 'after';
+  }
+
+  return 'none';
+}
+
+function moveCaretBeforeChip(chipNode: Node) {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const range = document.createRange();
+
+  const prev = chipNode.previousSibling;
+  if (prev && prev.nodeType === Node.TEXT_NODE) {
+    const len = prev.textContent?.length || 0;
+    range.setStart(prev, len);
+  } else {
+    range.setStartBefore(chipNode);
+  }
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+function moveCaretAfterChip(chipNode: Node) {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const range = document.createRange();
+
+  const next = chipNode.nextSibling;
+  if (next && next.nodeType === Node.TEXT_NODE) {
+    range.setStart(next, 0);
+  } else {
+    range.setStartAfter(chipNode);
+  }
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 function InvalidCatatanContentEditable({
   value,
   onChange,
@@ -40,12 +105,22 @@ function InvalidCatatanContentEditable({
 
   React.useEffect(() => {
     if (editorRef.current && !isTypingRef.current) {
-      const chipHtml = `<span contenteditable="false" data-invalid-chip="true" class="inline-flex items-center px-1.5 py-0.5 my-0.5 mx-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold align-baseline select-none cursor-default">${escapeHtml(invalidReason)}</span>`;
-      
-      const pEsc = escapeHtml(prefixNote);
-      const sEsc = escapeHtml(suffixNote);
+      const el = editorRef.current;
+      el.innerHTML = '';
 
-      editorRef.current.innerHTML = `${pEsc}${chipHtml}${sEsc}`;
+      const prefixTextNode = document.createTextNode(prefixNote);
+      
+      const chipSpan = document.createElement('span');
+      chipSpan.setAttribute('contenteditable', 'false');
+      chipSpan.setAttribute('data-invalid-chip', 'true');
+      chipSpan.className = 'inline-block px-1.5 py-0.5 my-0.5 mx-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold align-baseline select-none cursor-default';
+      chipSpan.textContent = invalidReason;
+
+      const suffixTextNode = document.createTextNode(suffixNote);
+
+      el.appendChild(prefixTextNode);
+      el.appendChild(chipSpan);
+      el.appendChild(suffixTextNode);
     }
   }, [value, invalidReason]);
 
@@ -78,8 +153,19 @@ function InvalidCatatanContentEditable({
     } else {
       const text = el.innerText || el.textContent || '';
       newPrefix = text;
-      const chipHtml = `<span contenteditable="false" data-invalid-chip="true" class="inline-flex items-center px-1.5 py-0.5 my-0.5 mx-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold align-baseline select-none cursor-default">${escapeHtml(invalidReason)}</span>`;
-      el.innerHTML = `${escapeHtml(newPrefix)}${chipHtml}`;
+      
+      const prefixTextNode = document.createTextNode(newPrefix);
+      const chipSpan = document.createElement('span');
+      chipSpan.setAttribute('contenteditable', 'false');
+      chipSpan.setAttribute('data-invalid-chip', 'true');
+      chipSpan.className = 'inline-block px-1.5 py-0.5 my-0.5 mx-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold align-baseline select-none cursor-default';
+      chipSpan.textContent = invalidReason;
+      const suffixTextNode = document.createTextNode('');
+
+      el.innerHTML = '';
+      el.appendChild(prefixTextNode);
+      el.appendChild(chipSpan);
+      el.appendChild(suffixTextNode);
     }
 
     const formatted = formatCatatanParts(newPrefix, invalidReason, newSuffix);
@@ -87,20 +173,82 @@ function InvalidCatatanContentEditable({
 
     setTimeout(() => {
       isTypingRef.current = false;
-    }, 50);
+    }, 100);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Backspace' || e.key === 'Delete') {
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0);
-        const chipNode = editorRef.current?.querySelector('[data-invalid-chip="true"]');
-        if (chipNode && range.intersectsNode(chipNode)) {
-          if (sel.toString().includes(invalidReason) || !range.collapsed) {
-            e.preventDefault();
-          }
+    const chipNode = editorRef.current?.querySelector('[data-invalid-chip="true"]');
+    if (!chipNode) return;
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    const caretPos = getCaretPositionRelativeChip(chipNode, sel);
+
+    if (e.key === 'ArrowRight') {
+      if (caretPos === 'before') {
+        e.preventDefault();
+        moveCaretAfterChip(chipNode);
+      }
+    } else if (e.key === 'ArrowLeft') {
+      if (caretPos === 'after') {
+        e.preventDefault();
+        moveCaretBeforeChip(chipNode);
+      }
+    } else if (e.key === 'Backspace') {
+      const range = sel.getRangeAt(0);
+      if (range.intersectsNode(chipNode)) {
+        if (sel.toString().includes(invalidReason) || !range.collapsed) {
+          e.preventDefault();
         }
+      } else if (caretPos === 'after') {
+        const prev = chipNode.previousSibling;
+        if (prev && prev.nodeType === Node.TEXT_NODE && (prev.textContent?.length || 0) > 0) {
+          e.preventDefault();
+          moveCaretBeforeChip(chipNode);
+        } else {
+          e.preventDefault();
+        }
+      }
+    } else if (e.key === 'Delete') {
+      const range = sel.getRangeAt(0);
+      if (range.intersectsNode(chipNode)) {
+        if (sel.toString().includes(invalidReason) || !range.collapsed) {
+          e.preventDefault();
+        }
+      } else if (caretPos === 'before') {
+        e.preventDefault();
+        moveCaretAfterChip(chipNode);
+      }
+    }
+  };
+
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const chipNode = target.closest('[data-invalid-chip="true"]');
+    if (chipNode) {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = chipNode.getBoundingClientRect();
+      if (e.clientX < rect.left + rect.width / 2) {
+        moveCaretBeforeChip(chipNode);
+      } else {
+        moveCaretAfterChip(chipNode);
+      }
+    }
+  };
+
+  const handleSelection = () => {
+    const chipNode = editorRef.current?.querySelector('[data-invalid-chip="true"]');
+    if (!chipNode) return;
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) {
+      if (chipNode.contains(range.startContainer) || range.startContainer === chipNode) {
+        moveCaretAfterChip(chipNode);
       }
     }
   };
@@ -113,6 +261,9 @@ function InvalidCatatanContentEditable({
         suppressContentEditableWarning
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onClick={handleClick}
+        onMouseUp={handleSelection}
+        onKeyUp={handleSelection}
         onBlur={() => {
           isTypingRef.current = false;
         }}
