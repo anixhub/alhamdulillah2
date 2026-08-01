@@ -528,6 +528,17 @@ export default function AdminChatDrawer({
     };
   }, []);
 
+  // Lock background page body scroll when chat drawer is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
+
   const loadChatMessages = async () => {
     setLoading(true);
     try {
@@ -1042,8 +1053,9 @@ export default function AdminChatDrawer({
           minWidth: layoutMode === 'floating' ? '340px' : undefined,
           maxWidth: layoutMode === 'floating' ? '100vw' : undefined,
           transform: layoutMode === 'floating' ? `translateX(${positionX}px)` : undefined,
+          overscrollBehavior: 'contain'
         }}
-        className={`relative z-10 pointer-events-auto flex flex-col bg-white border-slate-200/90 shadow-2xl transition-all duration-150 ease-out ${
+        className={`relative z-10 pointer-events-auto flex flex-col bg-white border-slate-200/90 shadow-2xl transition-all duration-150 ease-out overscroll-contain ${
           isClosing 
             ? 'animate-out fade-out slide-out-to-bottom-full duration-150 ease-in' 
             : 'animate-in fade-in slide-in-from-bottom-full duration-150 ease-out'
@@ -1262,7 +1274,7 @@ export default function AdminChatDrawer({
 
         {/* TAB 2: MEDIA CONTENT BODY (COMPACT DESKTOP ICON VIEW) */}
         {activeTab === 'media' ? (
-          <div className="flex-1 p-3 sm:p-4 overflow-y-auto bg-slate-50/60">
+          <div className="flex-1 p-3 sm:p-4 overflow-y-auto overscroll-contain bg-slate-50/60">
             {mediaMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center">
                 <Paperclip className="h-8 w-8 text-slate-300 mb-2" />
@@ -1399,7 +1411,7 @@ export default function AdminChatDrawer({
           </div>
         ) : (
           /* TAB 1: MAIN CHAT MESSAGES LIST */
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 scrollbar-thin">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-4 scrollbar-thin">
             {loading ? (
               <div className="flex h-full items-center justify-center text-slate-400 text-xs font-medium py-12">
                 Memuat percakapan...
@@ -1804,7 +1816,7 @@ export default function AdminChatDrawer({
             {showMentionMenu && (
               <div 
                 ref={mentionMenuRef}
-                className="absolute bottom-full left-4 right-4 mb-2 z-50 max-h-56 overflow-y-auto rounded-2xl bg-white p-2 shadow-2xl border border-purple-100 animate-in fade-in zoom-in-95 duration-100"
+                className="absolute bottom-full left-4 right-4 mb-2 z-50 max-h-56 overflow-y-auto overscroll-contain rounded-2xl bg-white p-2 shadow-2xl border border-purple-100 animate-in fade-in zoom-in-95 duration-100"
               >
                 <div className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-purple-700 uppercase tracking-wider border-b border-slate-100 mb-1">
                   <AtSign className="h-3 w-3" />
@@ -2271,7 +2283,7 @@ export default function AdminChatDrawer({
             </div>
 
             {/* Image Container */}
-            <div className="rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-black/40 max-h-[80vh] flex items-center justify-center">
+            <div className="rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-black/40 max-h-[80vh] overflow-y-auto overscroll-contain flex items-center justify-center">
               <img
                 src={previewImageModal.url}
                 alt={previewImageModal.name}
