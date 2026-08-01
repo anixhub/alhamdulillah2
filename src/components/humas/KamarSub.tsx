@@ -5,7 +5,7 @@ import {
   ArrowLeft, Search, Check, CheckCircle2, AlertCircle, X, MoreVertical, Award,
   Folder, FolderOpen, User, ArrowUpDown, Pencil, Settings, UserPlus, ArrowUp, ArrowDown,
   ChevronDown, Printer, Sparkles, UserCheck, ShieldAlert, UserMinus, ArrowLeftRight,
-  Download, Eye, Sliders, Hash, FileSpreadsheet, ListOrdered, Shuffle, Crown, GripVertical
+  Download, Eye, Sliders, Hash, FileSpreadsheet, ListOrdered, Shuffle, Crown
 } from 'lucide-react';
 import { Kompleks, Kamar, Santri } from '../../types';
 import SantriDetailModal from '../sekretaris/SantriDetailModal';
@@ -312,92 +312,53 @@ export default function KamarSub({
   // Active room members (when in detail mode)
   const currentRoomMembers = activeRoomForDetail ? getMembersOfRoom(activeRoomForDetail.nama) : [];
 
-  // Drag & Drop states for closet slots
-  const [draggedSlotNum, setDraggedSlotNum] = useState<number | null>(null);
-  const [dragOverSlotNum, setDragOverSlotNum] = useState<number | null>(null);
-  const [targetAddSlotNum, setTargetAddSlotNum] = useState<number | null>(null);
-
-  // Generate slots corresponding to room capacity (1 to kapasitas)
-  const roomSlots = React.useMemo(() => {
-    if (!activeRoomForDetail) return [];
-    const capacity = Math.max(1, activeRoomForDetail.kapasitas || 15);
-
-    const assignedByLemari: Record<number, Santri> = {};
-    const unassignedMembers: Santri[] = [];
-
-    currentRoomMembers.forEach(m => {
-      const lemNum = parseInt(m.nomorLemari || '', 10);
-      if (!isNaN(lemNum) && lemNum >= 1 && lemNum <= capacity && !assignedByLemari[lemNum]) {
-        assignedByLemari[lemNum] = m;
-      } else {
-        unassignedMembers.push(m);
-      }
-    });
-
-    let unassignedIdx = 0;
-    const slots: { slotNum: number; student: Santri | null }[] = [];
-
-    for (let i = 1; i <= capacity; i++) {
-      if (assignedByLemari[i]) {
-        slots.push({ slotNum: i, student: assignedByLemari[i] });
-      } else if (unassignedIdx < unassignedMembers.length) {
-        slots.push({ slotNum: i, student: unassignedMembers[unassignedIdx] });
-        unassignedIdx++;
-      } else {
-        slots.push({ slotNum: i, student: null });
-      }
+  // Filtered members for detail view
+  const filteredStudents = currentRoomMembers.filter(s => {
+    // Search query
+    if (studentSearchQuery) {
+      const q = studentSearchQuery.toLowerCase();
+      const matchName = (s.nama || '').toLowerCase().includes(q);
+      const matchNis = (s.nis || '').toLowerCase().includes(q);
+      const matchLemari = (s.nomorLemari || '').toLowerCase().includes(q);
+      if (!matchName && !matchNis && !matchLemari) return false;
     }
 
-    return slots;
-  }, [activeRoomForDetail, currentRoomMembers]);
-
-  const handleMoveOrSwapSlot = (sourceSlotNum: number, targetSlotNum: number) => {
-    if (!activeRoomForDetail || sourceSlotNum === targetSlotNum) return;
-
-    const capacity = activeRoomForDetail.kapasitas || 15;
-    if (sourceSlotNum < 1 || sourceSlotNum > capacity || targetSlotNum < 1 || targetSlotNum > capacity) return;
-
-    const studentSource = roomSlots.find(slot => slot.slotNum === sourceSlotNum)?.student;
-    const studentTarget = roomSlots.find(slot => slot.slotNum === targetSlotNum)?.student;
-
-    if (studentSource && !studentTarget) {
-      onUpdateSantriRoom(studentSource.id, activeRoomForDetail.nama, String(targetSlotNum));
-      showToast(`Santri "${studentSource.nama}" dipindahkan ke Lemari #${targetSlotNum}.`);
-    } else if (studentSource && studentTarget) {
-      onUpdateSantriRoom(studentSource.id, activeRoomForDetail.nama, String(targetSlotNum));
-      onUpdateSantriRoom(studentTarget.id, activeRoomForDetail.nama, String(sourceSlotNum));
-      showToast(`Lemari #${sourceSlotNum} dan #${targetSlotNum} berhasil ditukar (${studentSource.nama} ↔ ${studentTarget.nama}).`);
+    // Status filter (Muqim vs Kampung)
+    if (statusFilter !== 'Semua') {
+      const sStatus = (s.statusDomisili || s.status || 'Muqim').toLowerCase();
+      if (statusFilter === 'Muqim' && sStatus !== 'muqim') return false;
+      if (statusFilter === 'Kampung' && sStatus !== 'kampung') return false;
     }
-  };
 
-  // Filter slots based on search query & status filter
-  const displaySlots = React.useMemo(() => {
-    return roomSlots.filter(item => {
-      if (item.student && statusFilter !== 'Semua') {
-        const sStatus = (item.student.statusDomisili || item.student.status || 'Muqim').toLowerCase();
-        if (statusFilter === 'Muqim' && sStatus !== 'muqim') return false;
-        if (statusFilter === 'Kampung' && sStatus !== 'kampung') return false;
-      }
+    return true;
+  });
 
-      if (studentSearchQuery) {
-        const q = studentSearchQuery.toLowerCase().trim();
-        const slotText = `lemari ${item.slotNum}`;
-        const slotNumStr = String(item.slotNum);
+  // Sorted students
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    if (!sortField) return 0;
+    let valA = '';
+    let valB = '';
 
-        if (!item.student) {
-          return slotText.includes(q) || slotNumStr === q;
-        }
+    if (sortField === 'nama') { valA = a.nama; valB = b.nama; }
+    else if (sortField === 'nis') { valA = a.nis || ''; valB = b.nis || ''; }
+    else if (sortField === 'nomorLemari') { valA = a.nomorLemari || ''; valB = b.nomorLemari || ''; }
+    else if (sortField === 'statusKeanggotaan') { valA = a.statusKeanggotaan || ''; valB = b.statusKeanggotaan || ''; }
+    else if (sortField === 'kamar') { valA = a.kamar || ''; valB = b.kamar || ''; }
+    else if (sortField === 'alamat') { 
+      valA = a.desa ? `Ds. ${a.desa}, Kec. ${a.kecamatan || ''}` : (a.alamat || a.asal || '');
+      valB = b.desa ? `Ds. ${b.desa}, Kec. ${b.kecamatan || ''}` : (b.alamat || b.asal || '');
+    }
 
-        const s = item.student;
-        const mName = (s.nama || '').toLowerCase().includes(q);
-        const mNis = (s.nis || '').toLowerCase().includes(q);
-        const mLemari = (s.nomorLemari || slotNumStr).toLowerCase().includes(q) || slotText.includes(q);
-        return mName || mNis || mLemari;
-      }
+    const res = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+    return sortDirection === 'asc' ? res : -res;
+  });
 
-      return true;
-    });
-  }, [roomSlots, studentSearchQuery, statusFilter]);
+  // Pagination
+  const itemsPerPage = 50;
+  const totalPages = Math.ceil(sortedStudents.length / itemsPerPage) || 1;
+  const activePage = Math.min(currentPage, totalPages);
+  const startIndex = (activePage - 1) * itemsPerPage;
+  const paginatedStudents = sortedStudents.slice(startIndex, startIndex + itemsPerPage);
 
   useEffect(() => {
     updateScrollButtons();
@@ -569,8 +530,7 @@ export default function KamarSub({
   };
 
   // Add Member Modal logic
-  const handleOpenAddMemberModal = (slotNum?: number) => {
-    setTargetAddSlotNum(slotNum ?? null);
+  const handleOpenAddMemberModal = () => {
     setSelectedModalStudentIds([]);
     setAddMemberSearch('');
     setAddMemberRoomFilter('BelumKamar');
@@ -608,32 +568,12 @@ export default function KamarSub({
   const handleConfirmAddMembers = () => {
     if (!activeRoomForDetail || selectedModalStudentIds.length === 0) return;
 
-    if (targetAddSlotNum) {
-      const capacity = activeRoomForDetail.kapasitas || 15;
-      const occupiedSlots = new Set<number>();
-      currentRoomMembers.forEach(m => {
-        const num = parseInt(m.nomorLemari || '', 10);
-        if (!isNaN(num) && num >= 1 && num <= capacity) occupiedSlots.add(num);
-      });
-
-      let currentSlot = targetAddSlotNum;
-      selectedModalStudentIds.forEach((id) => {
-        while (currentSlot <= capacity && occupiedSlots.has(currentSlot)) {
-          currentSlot++;
-        }
-        onUpdateSantriRoom(id, activeRoomForDetail.nama, String(currentSlot <= capacity ? currentSlot : ''));
-        occupiedSlots.add(currentSlot);
-        currentSlot++;
-      });
-    } else {
-      selectedModalStudentIds.forEach(id => {
-        onUpdateSantriRoom(id, activeRoomForDetail.nama);
-      });
-    }
+    selectedModalStudentIds.forEach(id => {
+      onUpdateSantriRoom(id, activeRoomForDetail.nama);
+    });
 
     showToast(`${selectedModalStudentIds.length} santri berhasil ditambahkan ke ${activeRoomForDetail.nama}.`);
     setSelectedModalStudentIds([]);
-    setTargetAddSlotNum(null);
     setIsAddMemberModalOpen(false);
   };
 
