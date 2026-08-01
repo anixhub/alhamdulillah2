@@ -229,6 +229,7 @@ export default function PengaturanView({
   const [loadingFeedbacks, setLoadingFeedbacks] = useState<boolean>(false);
   const [selectedFeedbackIds, setSelectedFeedbackIds] = useState<string[]>([]);
   const [filterStarredOnly, setFilterStarredOnly] = useState<boolean>(false);
+  const [filterFeedbackStatus, setFilterFeedbackStatus] = useState<string>('semua');
   const [activeFeedbackDetail, setActiveFeedbackDetail] = useState<any | null>(null);
 
   const [feedbackDeleteConfirm, setFeedbackDeleteConfirm] = useState<{
@@ -386,6 +387,44 @@ export default function PengaturanView({
     }
   };
 
+  const handleUpdateFeedbackStatus = async (id: string, newStatus: string) => {
+    try {
+      setFeedbacks(prev => prev.map(item => {
+        if (String(item.id) === String(id)) {
+          return { ...item, status: newStatus };
+        }
+        return item;
+      }));
+
+      if (activeFeedbackDetail && String(activeFeedbackDetail.id) === String(id)) {
+        setActiveFeedbackDetail((prev: any) => ({ ...prev, status: newStatus }));
+      }
+
+      const local = localStorage.getItem('smartsantri_local_feedback');
+      if (local) {
+        const parsed = JSON.parse(local);
+        const mapped = parsed.map((item: any) => {
+          if (String(item.id) === String(id)) {
+            return { ...item, status: newStatus };
+          }
+          return item;
+        });
+        localStorage.setItem('smartsantri_local_feedback', JSON.stringify(mapped));
+      }
+
+      const status = await getSupabaseStatus();
+      if (status.connected) {
+        await fetch(`/api/db/feedback/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+      }
+    } catch (e) {
+      console.error("Gagal mengubah status pengerjaan feedback:", e);
+    }
+  };
+
   const handleClearAllFeedbacks = async () => {
     try {
       for (const f of feedbacks) {
@@ -505,6 +544,7 @@ export default function PengaturanView({
         'Pengirim': sender,
         'Jabatan / Role': role,
         'Pesan / Masukan': message,
+        'Status Pengerjaan': f.status || 'Belum dikerjakan',
         'Status Bintang': isStarred
       };
     });
@@ -517,6 +557,7 @@ export default function PengaturanView({
       { wch: 32 },  // Pengirim
       { wch: 20 },  // Jabatan / Role
       { wch: 60 },  // Pesan / Masukan
+      { wch: 20 },  // Status Pengerjaan
       { wch: 16 }   // Status Bintang
     ];
 
@@ -2825,8 +2866,14 @@ export default function PengaturanView({
 
             {activeCategory === 'feedback' && (() => {
               const displayedFeedbacks = feedbacks.filter(f => {
-                if (filterStarredOnly) {
-                  return f.is_starred || f.isStarred;
+                if (filterStarredOnly && !(f.is_starred || f.isStarred)) {
+                  return false;
+                }
+                if (filterFeedbackStatus !== 'semua') {
+                  const currentSt = f.status || 'Belum dikerjakan';
+                  if (currentSt !== filterFeedbackStatus) {
+                    return false;
+                  }
                 }
                 return true;
               });
@@ -2852,15 +2899,26 @@ export default function PengaturanView({
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                      {/* Filter Status Dropdown */}
+                      <select
+                        value={filterFeedbackStatus}
+                        onChange={(e) => setFilterFeedbackStatus(e.target.value)}
+                        className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer shadow-2xs"
+                      >
+                        <option value="semua">Semua Status</option>
+                        <option value="Belum dikerjakan">Belum dikerjakan</option>
+                        <option value="Sedang Dikerjakan">Sedang Dikerjakan</option>
+                        <option value="Teratasi">Teratasi</option>
+                      </select>
+
                       {/* Export Excel */}
                       <button
                         onClick={handleExportFeedbacksExcel}
                         disabled={displayedFeedbacks.length === 0}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-bold transition-all cursor-pointer active:scale-95 disabled:opacity-50"
-                        title="Unduh data feedback ke file Excel"
+                        className="inline-flex items-center justify-center p-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                        title="Export Excel"
                       >
-                        <Download className="h-3.5 w-3.5" />
-                        <span>Export Excel</span>
+                        <Download className="h-4 w-4" />
                       </button>
 
                       {/* Toggle Starred Only filter */}
@@ -2869,24 +2927,24 @@ export default function PengaturanView({
                           setFilterStarredOnly(!filterStarredOnly);
                           setSelectedFeedbackIds([]);
                         }}
-                        className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                        className={`inline-flex items-center justify-center p-2.5 rounded-xl border transition-all cursor-pointer active:scale-95 ${
                           filterStarredOnly
                             ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
                             : 'bg-white border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50'
                         }`}
+                        title={filterStarredOnly ? 'Tampilkan Semua Pesan' : 'Tampilkan Pesan Berbintang'}
                       >
-                        <Star className={`h-3.5 w-3.5 ${filterStarredOnly ? 'fill-amber-400 text-amber-500' : ''}`} />
-                        <span>{filterStarredOnly ? 'Tampilkan Semua' : 'Tampilkan Berbintang'}</span>
+                        <Star className={`h-4 w-4 ${filterStarredOnly ? 'fill-amber-400 text-amber-500' : ''}`} />
                       </button>
 
                       {/* Refresh Feedbacks */}
                       <button
                         onClick={fetchFeedbacks}
                         disabled={loadingFeedbacks}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-50 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                        className="inline-flex items-center justify-center p-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:bg-slate-50 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                        title="Perbarui Data Feedback"
                       >
-                        <RefreshCw className={`h-3.5 w-3.5 ${loadingFeedbacks ? 'animate-spin' : ''}`} />
-                        <span>Perbarui</span>
+                        <RefreshCw className={`h-4 w-4 ${loadingFeedbacks ? 'animate-spin' : ''}`} />
                       </button>
                     </div>
                   </div>
@@ -2972,19 +3030,20 @@ export default function PengaturanView({
                       <p className="text-xs text-slate-400 max-w-sm leading-relaxed mb-6">
                         {filterStarredOnly
                           ? 'Belum ada pesan masukan yang Anda tandai sebagai pesan berbintang.'
-                          : 'Belum ada pesan masukan atau kendala dari pengurus pesantren.'}
+                          : 'Belum ada pesan masukan atau kendala yang sesuai dengan filter.'}
                       </p>
                       <button
                         onClick={() => {
-                          if (filterStarredOnly) {
+                          if (filterStarredOnly || filterFeedbackStatus !== 'semua') {
                             setFilterStarredOnly(false);
+                            setFilterFeedbackStatus('semua');
                           } else {
                             fetchFeedbacks();
                           }
                         }}
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition-all cursor-pointer active:scale-95"
                       >
-                        <span>{filterStarredOnly ? 'Lihat Semua Pesan' : 'Segarkan'}</span>
+                        <span>{(filterStarredOnly || filterFeedbackStatus !== 'semua') ? 'Lihat Semua Pesan' : 'Segarkan'}</span>
                       </button>
                     </div>
                   ) : (
@@ -3038,12 +3097,31 @@ export default function PengaturanView({
                               </div>
 
                               {/* Pesan (truncated summary) */}
-                              <div className="flex-1 text-slate-600 font-medium truncate pr-4">
+                              <div className="flex-1 text-slate-600 font-medium truncate pr-2">
                                 {messageText}
                               </div>
 
+                              {/* Dropdown Status Pengerjaan */}
+                              <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                                <select
+                                  value={f.status || 'Belum dikerjakan'}
+                                  onChange={(e) => handleUpdateFeedbackStatus(f.id, e.target.value)}
+                                  className={`text-[11px] font-bold py-1.5 px-3 rounded-xl border cursor-pointer transition-all focus:outline-none focus:ring-2 ${
+                                    (f.status === 'Teratasi') 
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-emerald-400' 
+                                      : (f.status === 'Sedang Dikerjakan' || f.status === 'Sedan Dikerjakan')
+                                      ? 'bg-blue-50 text-blue-700 border-blue-200 focus:ring-blue-400'
+                                      : 'bg-amber-50 text-amber-800 border-amber-200 focus:ring-amber-400'
+                                  }`}
+                                >
+                                  <option value="Belum dikerjakan" className="bg-white text-amber-800 font-bold">Belum dikerjakan</option>
+                                  <option value="Sedang Dikerjakan" className="bg-white text-blue-700 font-bold">Sedang Dikerjakan</option>
+                                  <option value="Teratasi" className="bg-white text-emerald-700 font-bold">Teratasi</option>
+                                </select>
+                              </div>
+
                               {/* Tanggal & Hover Trash */}
-                              <div className="w-32 shrink-0 text-right font-semibold relative h-8 flex items-center justify-end">
+                              <div className="w-28 shrink-0 text-right font-semibold relative h-8 flex items-center justify-end">
                                 <div className="group-hover:opacity-0 transition-opacity duration-150 font-mono text-[11px] text-slate-400 whitespace-nowrap">
                                   {dateStr}
                                 </div>
@@ -3112,8 +3190,28 @@ export default function PengaturanView({
                             </span>
                           </div>
 
+                          {/* Status Pengerjaan Selector in Modal */}
+                          <div className="mt-4 flex items-center justify-center gap-2">
+                            <span className="text-xs font-bold text-slate-400">Status:</span>
+                            <select
+                              value={activeFeedbackDetail.status || 'Belum dikerjakan'}
+                              onChange={(e) => handleUpdateFeedbackStatus(activeFeedbackDetail.id, e.target.value)}
+                              className={`text-xs font-bold py-1.5 px-3 rounded-xl border cursor-pointer transition-all focus:outline-none focus:ring-2 ${
+                                (activeFeedbackDetail.status === 'Teratasi') 
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-emerald-400' 
+                                  : (activeFeedbackDetail.status === 'Sedang Dikerjakan' || activeFeedbackDetail.status === 'Sedan Dikerjakan')
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200 focus:ring-blue-400'
+                                  : 'bg-amber-50 text-amber-800 border-amber-200 focus:ring-amber-400'
+                              }`}
+                            >
+                              <option value="Belum dikerjakan" className="bg-white text-amber-800 font-bold">Belum dikerjakan</option>
+                              <option value="Sedang Dikerjakan" className="bg-white text-blue-700 font-bold">Sedang Dikerjakan</option>
+                              <option value="Teratasi" className="bg-white text-emerald-700 font-bold">Teratasi</option>
+                            </select>
+                          </div>
+
                           {/* Full message content */}
-                          <div className="mt-6 text-left bg-slate-50 border border-slate-100/80 rounded-2xl p-5 text-xs text-slate-700 font-medium leading-relaxed whitespace-pre-wrap max-h-56 overflow-y-auto scrollbar-thin">
+                          <div className="mt-5 text-left bg-slate-50 border border-slate-100/80 rounded-2xl p-5 text-xs text-slate-700 font-medium leading-relaxed whitespace-pre-wrap max-h-56 overflow-y-auto scrollbar-thin">
                             {activeFeedbackDetail.message || activeFeedbackDetail.content}
                           </div>
 

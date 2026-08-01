@@ -5,6 +5,7 @@ import Header from './components/Header';
 import Drawer from './components/Drawer';
 import Sidebar from './components/Sidebar';
 import HelpModal from './components/HelpModal';
+import AdminChatDrawer from './components/AdminChatDrawer';
 import { fetchTableData, insertTableRow, insertTableRows, updateTableRow, deleteTableRow, subscribeRealtimeChanges, snakeToCamel, safeLocalStorageSetItem } from './lib/api';
 
 // Views
@@ -66,6 +67,37 @@ export default function App() {
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
   const [isSelectionMode, setIsSelectionMode] = useState<boolean>(false);
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
+  const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
+  const [hasMentionNotification, setHasMentionNotification] = useState<boolean>(false);
+
+  // Realtime WS unread notification counter & mention detector for Admin Chat
+  React.useEffect(() => {
+    const currentRole = (localStorage.getItem('smartsantri_active_role') || 'superadmin').toLowerCase();
+    const currentUsername = (localStorage.getItem('smartsantri_active_username') || 'pengurus@attaroqqy.com').toLowerCase();
+    const currentPrefix = currentUsername.split('@')[0];
+
+    const unsubscribe = subscribeRealtimeChanges((payload: any) => {
+      if ((payload.type === 'admin_chat_message' && payload.message) || (payload.table === 'admin_chat' && payload.action === 'insert')) {
+        const msgObj = payload.message || payload.record;
+        if (msgObj && msgObj.message) {
+          const lowerMsg = String(msgObj.message).toLowerCase();
+          const isMentioned = lowerMsg.includes(`@${currentRole}`) || 
+                              lowerMsg.includes(`@${currentUsername}`) || 
+                              (currentPrefix && lowerMsg.includes(`@${currentPrefix}`)) ||
+                              lowerMsg.includes('@admin');
+          if (isMentioned) {
+            setHasMentionNotification(true);
+          }
+        }
+
+        if (!isChatOpen) {
+          setUnreadChatCount(prev => prev + 1);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [isChatOpen]);
 
   const handleChangeModule = (mod: string, subTab?: string) => {
     if (isSelectionMode) return;
@@ -678,6 +710,20 @@ export default function App() {
           activeModule={activeModule}
           activeSubTab={activeSubTab}
           onOpenDrawer={() => setIsDrawerOpen(true)}
+          onOpenChat={() => setIsChatOpen(true)}
+          unreadChatCount={unreadChatCount}
+          hasMentionNotification={hasMentionNotification}
+        />
+
+        {/* Admin Obrolan Chat Drawer */}
+        <AdminChatDrawer
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+          unreadCount={unreadChatCount}
+          onClearUnread={() => {
+            setUnreadChatCount(0);
+            setHasMentionNotification(false);
+          }}
         />
 
         {/* Main Drawer Container (Mobile Menu) */}

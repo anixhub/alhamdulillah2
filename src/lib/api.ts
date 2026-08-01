@@ -89,6 +89,17 @@ export function subscribeRealtimeChanges(callback: (event: any) => void): () => 
   };
 }
 
+export function sendRealtimeWSMessage(payload: any): void {
+  initRealtimeWebSocket();
+  if (sharedSocket && sharedSocket.readyState === WebSocket.OPEN) {
+    try {
+      sharedSocket.send(JSON.stringify(payload));
+    } catch (err) {
+      console.warn("Failed to send WS message:", err);
+    }
+  }
+}
+
 export async function getSupabaseClient(): Promise<any> {
   return null;
 }

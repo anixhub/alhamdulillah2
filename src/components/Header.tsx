@@ -1,14 +1,24 @@
 import React from 'react';
-import { Menu, Bell } from 'lucide-react';
+import { Menu, Bell, MessageSquare } from 'lucide-react';
 import OnlineUsers from './OnlineUsers';
 
 interface HeaderProps {
   activeModule: string;
   activeSubTab?: string;
   onOpenDrawer: () => void;
+  onOpenChat?: () => void;
+  unreadChatCount?: number;
+  hasMentionNotification?: boolean;
 }
 
-export default function Header({ activeModule, activeSubTab, onOpenDrawer }: HeaderProps) {
+export default function Header({ 
+  activeModule, 
+  activeSubTab, 
+  onOpenDrawer,
+  onOpenChat,
+  unreadChatCount = 0,
+  hasMentionNotification = false
+}: HeaderProps) {
   // Translate module name and sub-tab to hierarchical breadcrumb
   const getBreadcrumbTitle = (mod: string, sub?: string) => {
     let mainTitle = '';
@@ -84,9 +94,27 @@ export default function Header({ activeModule, activeSubTab, onOpenDrawer }: Hea
             </span>
           </div>
 
-          {/* Right Side: Online Users & Bell Notification */}
-          <div className="flex items-center gap-2">
+          {/* Right Side: Online Users, Chat & Bell Notification */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <OnlineUsers />
+
+            {/* Message Chat Button */}
+            <button
+              id="btn-messages-mobile"
+              onClick={onOpenChat}
+              className="relative flex items-center justify-center p-1.5 text-slate-700 hover:text-emerald-700 active:scale-95 transition-all cursor-pointer"
+              title="Buka Obrolan Pengurus"
+            >
+              <MessageSquare className="h-6 w-6" />
+              {hasMentionNotification ? (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-purple-600 text-white font-extrabold text-[10px] shadow-xs">
+                  @
+                </span>
+              ) : unreadChatCount > 0 ? (
+                <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+              ) : null}
+            </button>
+
             <button 
               id="btn-notifications-mobile"
               className="relative flex items-center justify-center p-1.5 text-slate-600 hover:text-emerald-600 transition-colors"
@@ -110,13 +138,31 @@ export default function Header({ activeModule, activeSubTab, onOpenDrawer }: Hea
             </span>
           </div>
 
-          {/* Right: Online Users & Bell Notification */}
-          <div className="flex items-center gap-3">
+          {/* Right: Online Users, Message Chat & Bell Notification */}
+          <div className="flex items-center gap-2.5">
             <OnlineUsers />
             <div className="h-4 w-px bg-slate-200" />
+
+            {/* Message Chat Button */}
+            <button 
+              id="btn-messages-desktop"
+              onClick={onOpenChat}
+              className="relative flex items-center justify-center p-1.5 text-slate-600 hover:text-emerald-600 transition-colors active:scale-95 cursor-pointer rounded-lg hover:bg-slate-100/60"
+              title="Buka Obrolan Pengurus"
+            >
+              <MessageSquare className="h-5 w-5" />
+              {hasMentionNotification ? (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-purple-600 text-white font-extrabold text-[10px] shadow-xs">
+                  @
+                </span>
+              ) : unreadChatCount > 0 ? (
+                <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+              ) : null}
+            </button>
+
             <button 
               id="btn-notifications-desktop"
-              className="relative flex items-center justify-center p-1.5 text-slate-600 hover:text-emerald-600 transition-colors"
+              className="relative flex items-center justify-center p-1.5 text-slate-600 hover:text-emerald-600 transition-colors rounded-lg hover:bg-slate-100/60"
             >
               <Bell className="h-5 w-5" />
               <span className="absolute top-1 right-1 flex h-2 w-2">

@@ -31,6 +31,8 @@ async function startServer() {
           connectedUserId = msg.user.id || Math.random().toString(36).substring(2);
           onlineUsers.set(connectedUserId, { ...msg.user, id: connectedUserId, lastSeen: Date.now() });
           broadcastWebSocketMessage({ type: "online_users", users: Array.from(onlineUsers.values()) });
+        } else if (msg.type === "admin_chat_message" || msg.type === "chat_message") {
+          broadcastWebSocketMessage(msg);
         } else if (msg.type === "ping") {
           ws.send(JSON.stringify({ type: "pong", timestamp: Date.now() }));
         }

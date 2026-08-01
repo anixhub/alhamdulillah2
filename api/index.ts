@@ -103,7 +103,8 @@ const VALID_TABLES = new Set([
   "roles",
   "role_has_permissions",
   "document_generation_logs",
-  "document_templates"
+  "document_templates",
+  "admin_chat"
 ]);
 
 // -------------------------------------------------------------

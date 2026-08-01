@@ -56,6 +56,7 @@ export default function HelpModal({ isOpen, onClose }: HelpModalProps) {
       sender_role: activeRoleState,
       message: feedbackText.trim(),
       is_starred: false,
+      status: 'Belum dikerjakan',
       created_at: new Date().toISOString()
     };
 
